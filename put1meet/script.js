@@ -815,7 +815,8 @@ function isProfileComplete(user = currentUser) {
       Number(user?.placesVisited) >= 0 &&
       user?.preferredVibe &&
       user?.randomRequests &&
-      (!isCurrentAccount || (user?.phoneVerified && user?.emailVerified)),
+      user?.phone &&
+      (!isCurrentAccount || user?.email),
   );
 }
 
@@ -831,7 +832,7 @@ function setOtpMessage(message, verified = false) {
   otpStatus.textContent = message;
   otpBox.classList.toggle("verified", verified);
   verifiedPhone.hidden = !verified;
-  verifiedPhone.textContent = verified ? `Verified phone: ${authForm.phone.value}` : "";
+  verifiedPhone.textContent = verified ? `Phone saved: ${authForm.phone.value}` : "";
 }
 
 function setEmailVerifyMessage(message, verified = false) {
@@ -842,30 +843,23 @@ function setEmailVerifyMessage(message, verified = false) {
 function syncVerificationUi() {
   const isCompletingExistingProfile = Boolean(currentUser);
   const phone = normalizePhone(authForm.phone.value);
-  const phoneAlreadyVerified =
-    isCompletingExistingProfile && currentUser.phoneVerified && phone === normalizePhone(currentUser.phone || "");
-
   authForm.phone.closest("label").hidden = authMode === "signin";
   otpBox.hidden = authMode === "signin";
   emailVerifyBox.hidden = !isCompletingExistingProfile;
 
   if (authMode === "signin") return;
 
-  if (phoneAlreadyVerified) {
-    otpState = { ...otpState, phone, verified: true };
-    setOtpMessage(`Phone verified: ${currentUser.phone}`, true);
-  } else if (otpState.verified && otpState.phone === phone) {
-    setOtpMessage("Phone number verified.", true);
+  if (phoneLooksValid(phone)) {
+    setOtpMessage("Phone number saved. OTP will work after SMS is configured in Supabase.", true);
   } else {
-    otpState = { ...otpState, phone, verified: false };
-    setOtpMessage("Send an OTP before creating your account.", false);
+    setOtpMessage("Enter a valid phone number. OTP is not active yet.", false);
   }
 
   if (!isCompletingExistingProfile) return;
   if (currentUser.emailVerified) {
     setEmailVerifyMessage(`Verified: ${currentUser.email}`, true);
   } else {
-    setEmailVerifyMessage("Verify this later from Complete profile.", false);
+    setEmailVerifyMessage("Check your inbox for the Supabase verification email.", false);
   }
 }
 
@@ -880,7 +874,7 @@ function setAuthFieldVisible(name, visible) {
 
 function syncAuthModeFields() {
   const isSignin = authMode === "signin";
-  ["email", "name", "age", "gender", "phone", "otp", "instagram", "bio", "placesVisited", "preferredVibe", "randomRequests"].forEach(
+  ["email", "name", "age", "gender", "phone", "instagram", "bio", "placesVisited", "preferredVibe", "randomRequests"].forEach(
     (name) => setAuthFieldVisible(name, !isSignin),
   );
   authForm.username.disabled = false;
@@ -2322,56 +2316,9 @@ authForm.email.addEventListener("input", () => {
   if (!currentUser) return;
   const changedEmail = authForm.email.value.trim() !== currentUser.email;
   setEmailVerifyMessage(
-    changedEmail ? "Save the new email first, then verify it from Complete profile." : "Verify this later from Complete profile.",
+    changedEmail ? "Save the new email first. Supabase will send a verification link." : "Check your inbox for the Supabase verification email.",
     false,
   );
-});
-
-authForm.addEventListener("click", (event) => {
-  if (event.target.closest("[data-send-otp]")) {
-    const phone = normalizePhone(authForm.phone.value);
-    if (!phoneLooksValid(phone)) {
-      setOtpMessage("Enter a valid phone number first.", false);
-      authForm.phone.focus();
-      return;
-    }
-    otpState = {
-      phone,
-      code: String(Math.floor(100000 + Math.random() * 900000)),
-      verified: false,
-    };
-    authForm.otp.value = "";
-    setOtpMessage(`OTP sent to ${authForm.phone.value}. Demo code: ${otpState.code}`, false);
-    authForm.otp.focus();
-  }
-
-  if (event.target.closest("[data-verify-otp]")) {
-    const phone = normalizePhone(authForm.phone.value);
-    if (!otpState.code || otpState.phone !== phone) {
-      setOtpMessage("Send a fresh OTP for this phone number.", false);
-      return;
-    }
-    if (authForm.otp.value.trim() !== otpState.code) {
-      setOtpMessage("That OTP is not correct. Try again.", false);
-      return;
-    }
-    otpState.verified = true;
-    setOtpMessage("Phone number verified.", true);
-  }
-
-  if (event.target.closest("[data-send-email-verify]")) {
-    if (!currentUser) return;
-    const email = authForm.email.value.trim();
-    if (!email || !email.includes("@")) {
-      setEmailVerifyMessage("Enter a valid email address first.", false);
-      authForm.email.focus();
-      return;
-    }
-    currentUser = { ...currentUser, email, emailVerified: true };
-    localStorage.setItem("put1meetUser", JSON.stringify(currentUser));
-    setEmailVerifyMessage(`Verification link sent. Marked verified for demo: ${email}`, true);
-    renderAuthActions();
-  }
 });
 
 authForm.addEventListener("submit", async (event) => {
@@ -2432,10 +2379,8 @@ authForm.addEventListener("submit", async (event) => {
     authForm.password.focus();
     return;
   }
-  const existingVerifiedPhone =
-    currentUser?.phoneVerified && phone && phone === normalizePhone(currentUser.phone || "");
-  if (authMode === "signup" && (!phoneLooksValid(phone) || (!otpState.verified && !existingVerifiedPhone))) {
-    setOtpMessage("Verify your phone with OTP before continuing.", false);
+  if (authMode === "signup" && !phoneLooksValid(phone)) {
+    setOtpMessage("Enter a valid phone number. Phone OTP is not active yet.", false);
     authForm.phone.focus();
     return;
   }
@@ -2448,7 +2393,7 @@ authForm.addEventListener("submit", async (event) => {
     gender: formData.get("gender"),
     email,
     phone: formData.get("phone").trim(),
-    phoneVerified: authMode === "signup" ? true : Boolean(currentUser?.phoneVerified),
+    phoneVerified: Boolean(currentUser?.phoneVerified),
     instagram: formData.get("instagram").trim(),
     bio: formData.get("bio").trim(),
     placesVisited: Number(formData.get("placesVisited") || 0),

@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>put1meet | Bangalore spots</title>
     <link rel="preconnect" href="https://images.unsplash.com" />
-    <link rel="stylesheet" href="styles.css?v=51" />
+    <link rel="stylesheet" href="styles.css?v=52" />
   </head>
   <body>
     <header class="topbar">
@@ -177,9 +177,8 @@
         <div class="verify-box" id="emailVerifyBox" hidden>
           <div>
             <strong>Email verification</strong>
-            <span id="emailVerifyStatus">Verify this later from Complete profile.</span>
+            <span id="emailVerifyStatus">Use the Supabase email link sent after signup.</span>
           </div>
-          <button class="mini-button gold" type="button" data-send-email-verify>Verify email</button>
         </div>
         <label class="phone-field">
           Phone number
@@ -187,15 +186,10 @@
         </label>
         <div class="otp-box" id="otpBox">
           <div>
-            <strong>Phone OTP</strong>
-            <span id="otpStatus">Send an OTP before creating your account.</span>
+            <strong>Phone verification</strong>
+            <span id="otpStatus">Phone OTP is not active yet. SMS provider setup is needed in Supabase.</span>
           </div>
           <div class="verified-phone" id="verifiedPhone" hidden></div>
-          <div class="otp-actions">
-            <button class="mini-button gold" type="button" data-send-otp>Send OTP</button>
-            <input name="otp" inputmode="numeric" maxlength="6" placeholder="Enter OTP" aria-label="Enter phone OTP" />
-            <button class="mini-button secondary" type="button" data-verify-otp>Verify</button>
-          </div>
         </div>
         <label>
           Instagram
@@ -238,6 +232,6 @@
     </section>
 
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <script src="script.js?v=51"></script>
+    <script src="script.js?v=52"></script>
   </body>
 </html>
