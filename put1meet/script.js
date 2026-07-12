@@ -26,14 +26,14 @@ const spots = [
     ],
     reviews: [
       {
-        user: "Ananya",
+        user: "Community visitor",
         rating: "4.7",
         text: "Feels unreal that this much history is sitting inside regular traffic.",
         photo:
           "https://images.unsplash.com/photo-1605649461784-edc0ea9b420c?auto=format&fit=crop&w=900&q=80",
       },
       {
-        user: "Dev",
+        user: "Community visitor",
         rating: "4.3",
         text: "Best with someone who knows the stories. Go early, then get breakfast nearby.",
         photo:
@@ -63,7 +63,7 @@ const spots = [
     ],
     reviews: [
       {
-        user: "Mira",
+        user: "Community visitor",
         rating: "4.5",
         text: "Not flashy, but the small streets inside the fort are the whole point.",
         photo:
@@ -94,14 +94,14 @@ const spots = [
     ],
     reviews: [
       {
-        user: "Kabir",
+        user: "Community visitor",
         rating: "4.6",
         text: "Best chill drive plan. You hear the flights before you see them.",
         photo:
           "https://images.unsplash.com/photo-1436491865332-7a61a109cc05?auto=format&fit=crop&w=900&q=80",
       },
       {
-        user: "Tara",
+        user: "Community visitor",
         rating: "4.4",
         text: "Go with a small group and keep it respectful. The night lights are worth it.",
         photo:
@@ -131,7 +131,7 @@ const spots = [
     ],
     reviews: [
       {
-        user: "Ishan",
+        user: "Community visitor",
         rating: "4.8",
         text: "10/10 if you like chaotic history and used-book hunting.",
         photo:
@@ -161,7 +161,7 @@ const spots = [
     ],
     reviews: [
       {
-        user: "Nikhil",
+        user: "Community visitor",
         rating: "4.6",
         text: "Easy, pretty, and still has that old Bangalore texture.",
         photo:
@@ -191,7 +191,7 @@ const spots = [
     ],
     reviews: [
       {
-        user: "Rhea",
+        user: "Community visitor",
         rating: "4.4",
         text: "Quiet, layered, and less Instagram-obvious than most city walks.",
         photo:
@@ -221,7 +221,7 @@ const spots = [
     ],
     reviews: [
       {
-        user: "Kabir",
+        user: "Community visitor",
         rating: "4.2",
         text: "Crowded, but the sunrise still hits if you arrive early and stay patient.",
         photo:
@@ -251,7 +251,7 @@ const spots = [
     ],
     reviews: [
       {
-        user: "Naina",
+        user: "Community visitor",
         rating: "4.3",
         text: "Feels like a tiny hidden city hill. Best for a calm morning walk.",
         photo:
@@ -281,7 +281,7 @@ const spots = [
     ],
     reviews: [
       {
-        user: "Tara",
+        user: "Community visitor",
         rating: "4.1",
         text: "Small but fun if you are nearby. The cave-temple side makes it feel hidden.",
         photo:
@@ -312,7 +312,7 @@ const spots = [
     ],
     reviews: [
       {
-        user: "Sana",
+        user: "Community visitor",
         rating: "4.4",
         text: "Good quiet hill energy. Best with a small group and an early start.",
         photo:
@@ -343,7 +343,7 @@ const spots = [
     ],
     reviews: [
       {
-        user: "Rohan",
+        user: "Community visitor",
         rating: "4.4",
         text: "Quiet hill view with a proper offbeat feel. Best when the sky is dramatic.",
         photo:
@@ -373,7 +373,7 @@ const spots = [
     ],
     reviews: [
       {
-        user: "Aarav",
+        user: "Community visitor",
         rating: "4.6",
         text: "Easy city escape. The skyline view is the reason to go.",
         photo:
@@ -404,7 +404,7 @@ const spots = [
     ],
     reviews: [
       {
-        user: "Diya",
+        user: "Community visitor",
         rating: "4.5",
         text: "Nice low-effort road spot when you want Turahalli vibes without a long hike.",
         photo:
@@ -434,7 +434,7 @@ const spots = [
     ],
     reviews: [
       {
-        user: "Kabir",
+        user: "Community visitor",
         rating: "4.0",
         text: "Good moody photos from public edges, but safety matters a lot here.",
         photo:
@@ -466,7 +466,7 @@ const spots = [
     ],
     reviews: [
       {
-        user: "Neil",
+        user: "Community visitor",
         rating: "3.9",
         text: "Looks cinematic from the safe side, but this is definitely a look-don't-climb spot.",
         photo:
@@ -496,7 +496,7 @@ const spots = [
     ],
     reviews: [
       {
-        user: "Neil",
+        user: "Community visitor",
         rating: "3.7",
         text: "Interesting architecture from the road, but definitely not an entry spot.",
         photo:
@@ -511,44 +511,12 @@ if (Array.isArray(savedSuggestedSpots)) {
   spots.push(...savedSuggestedSpots);
 }
 
-const attendeePool = [
-  { name: "Aarav", age: 21, gender: "Male", relationship: "following" },
-  { name: "Diya", age: 20, gender: "Female", relationship: "follower" },
-  { name: "Kabir", age: 23, gender: "Male", relationship: "mutual" },
-  { name: "Meera", age: 22, gender: "Female", relationship: "random" },
-  { name: "Rohan", age: 24, gender: "Male", relationship: "random" },
-  { name: "Sana", age: 19, gender: "Female", relationship: "following" },
-  { name: "Neil", age: 25, gender: "Male", relationship: "follower" },
-  { name: "Tara", age: 22, gender: "Non-binary", relationship: "mutual" },
-  { name: "Ishan", age: 21, gender: "Male", relationship: "random" },
-  { name: "Rhea", age: 23, gender: "Female", relationship: "following" },
-  { name: "Aditya", age: 26, gender: "Male", relationship: "random" },
-  { name: "Naina", age: 20, gender: "Female", relationship: "follower" },
-  { name: "Pranav", age: 24, gender: "Male", relationship: "mutual" },
-  { name: "Zoya", age: 21, gender: "Female", relationship: "random" },
-  { name: "Vivaan", age: 22, gender: "Male", relationship: "following" },
-  { name: "Aisha", age: 25, gender: "Female", relationship: "follower" },
-  { name: "Reyansh", age: 19, gender: "Male", relationship: "random" },
-  { name: "Kiara", age: 20, gender: "Female", relationship: "mutual" },
-  { name: "Arjun", age: 27, gender: "Male", relationship: "random" },
-  { name: "Sara", age: 23, gender: "Female", relationship: "following" },
-  { name: "Yash", age: 22, gender: "Male", relationship: "follower" },
-  { name: "Anvi", age: 21, gender: "Female", relationship: "random" },
-  { name: "Krish", age: 24, gender: "Male", relationship: "mutual" },
-  { name: "Tanya", age: 20, gender: "Female", relationship: "random" },
-  { name: "Arya", age: 23, gender: "Non-binary", relationship: "following" },
-  { name: "Sahil", age: 25, gender: "Male", relationship: "random" },
-  { name: "Maya", age: 22, gender: "Female", relationship: "follower" },
-  { name: "Dhruv", age: 26, gender: "Male", relationship: "random" },
-];
+const publicProfiles = [];
 
 function hydrateSpotGroups(spot, spotIndex) {
   spot.groups.forEach((group, groupIndex) => {
     group.id = `${spot.id}-${group.date.toLowerCase().replace(/\s+/g, "-")}-${groupIndex}`;
-    group.attendees = Array.from({ length: group.people }, (_, attendeeIndex) => {
-      const person = attendeePool[(spotIndex * 3 + groupIndex + attendeeIndex) % attendeePool.length];
-      return { ...person };
-    });
+    group.attendees = [];
   });
   if (spot.groups.some((group) => group.id === `${spot.id}-minor-test`)) return;
   spot.groups.push({
@@ -557,11 +525,7 @@ function hydrateSpotGroups(spot, spotIndex) {
     time: "5:00 PM",
     people: 3,
     id: `${spot.id}-minor-test`,
-    attendees: [
-      { name: "Ria", age: 15, gender: "Female", relationship: "random" },
-      { name: "Dev", age: 16, gender: "Male", relationship: "random" },
-      { name: "Niv", age: 17, gender: "Non-binary", relationship: "random" },
-    ],
+    attendees: [],
   });
 }
 
@@ -597,6 +561,40 @@ const chatStore = JSON.parse(localStorage.getItem("put1meetChats") || "{}");
 const uploadStore = JSON.parse(localStorage.getItem("put1meetUploads") || "{}");
 const reviewStore = JSON.parse(localStorage.getItem("put1meetMeetReviews") || "{}");
 const siteRoleStore = JSON.parse(localStorage.getItem("put1meetSiteRoles") || "{}");
+const removedDummyProfileNames = [
+  "Aarav",
+  "Diya",
+  "Kabir",
+  "Meera",
+  "Rohan",
+  "Sana",
+  "Neil",
+  "Tara",
+  "Ishan",
+  "Rhea",
+  "Aditya",
+  "Naina",
+  "Pranav",
+  "Zoya",
+  "Vivaan",
+  "Aisha",
+  "Reyansh",
+  "Kiara",
+  "Arjun",
+  "Sara",
+  "Yash",
+  "Anvi",
+  "Krish",
+  "Tanya",
+  "Arya",
+  "Sahil",
+  "Maya",
+  "Dhruv",
+  "Ria",
+  "Dev",
+  "Niv",
+];
+const removedDummyProfileIds = new Set(removedDummyProfileNames.map((name) => name.toLowerCase()));
 let activeSpotId = null;
 let activeAction = null;
 let activeChatKey = null;
@@ -606,6 +604,26 @@ const chatBackdrop = document.querySelector("#chatBackdrop");
 const chatModal = document.querySelector("#chatModal");
 const closeChat = document.querySelector("#closeChat");
 const chatContent = document.querySelector("#chatContent");
+
+function purgeDummyProfileData() {
+  removedDummyProfileIds.forEach((id) => followedPeople.delete(id));
+  saveFollowedPeople();
+  let changedChats = false;
+  Object.keys(chatStore).forEach((key) => {
+    const directId = key.startsWith("dm-") ? key.replace("dm-", "") : "";
+    if (removedDummyProfileIds.has(directId)) {
+      delete chatStore[key];
+      changedChats = true;
+      return;
+    }
+    const filtered = (chatStore[key] || []).filter((message) => !removedDummyProfileNames.includes(message.sender));
+    if (filtered.length !== (chatStore[key] || []).length) {
+      chatStore[key] = filtered;
+      changedChats = true;
+    }
+  });
+  if (changedChats) saveObject("put1meetChats", chatStore);
+}
 
 function saveJoinedGroups() {
   localStorage.setItem("put1meetJoinedGroups", JSON.stringify([...joinedGroups]));
@@ -670,6 +688,25 @@ function saveAccountStore(accounts) {
   localStorage.setItem("put1meetAccounts", JSON.stringify(accounts));
 }
 
+function profileRowToPerson(row) {
+  return normalizePerson({
+    id: row.id,
+    username: row.username || "",
+    name: row.name || row.username || "Explorer",
+    age: Number(row.age || 18),
+    gender: row.gender || "Prefer not to say",
+    email: row.email || "",
+    phone: row.phone || "",
+    instagram: row.instagram || "",
+    bio: row.bio || "",
+    placesVisited: Number(row.places_visited || 0),
+    preferredVibe: row.preferred_vibe || "heritage",
+    randomRequests: row.random_requests || "yes",
+    siteRole: row.site_role || "member",
+    relationship: "explorer",
+  });
+}
+
 function makeSupabaseProfile(user, username = "") {
   const meta = user?.user_metadata || {};
   return {
@@ -697,6 +734,7 @@ async function syncSupabaseSession() {
   currentUser = { ...(currentUser || {}), ...makeSupabaseProfile(data.session.user, currentUser?.username) };
   localStorage.setItem("put1meetUser", JSON.stringify(currentUser));
   localStorage.setItem("put1meetLastUser", JSON.stringify(currentUser));
+  await loadPublicProfiles();
   renderAuthActions();
 }
 
@@ -706,13 +744,46 @@ async function hasSupabaseSession() {
   return Boolean(data?.session?.user);
 }
 
+async function loadPublicProfiles() {
+  if (!supabaseClient) return;
+  const { data, error } = await supabaseClient
+    .from("profiles")
+    .select("id, username, name, age, gender, email, phone, instagram, bio, places_visited, preferred_vibe, random_requests, site_role")
+    .order("created_at", { ascending: false })
+    .limit(50);
+  if (error || !Array.isArray(data)) return;
+  publicProfiles.splice(0, publicProfiles.length, ...data.map(profileRowToPerson));
+}
+
+async function saveProfileToSupabase(profile) {
+  if (!supabaseClient || !profile?.supabaseUserId) return;
+  const signedIn = await hasSupabaseSession();
+  if (!signedIn) return;
+  await supabaseClient.from("profiles").upsert({
+    id: profile.supabaseUserId,
+    username: profile.username,
+    name: profile.name,
+    age: profile.age,
+    gender: profile.gender,
+    email: profile.email,
+    phone: profile.phone,
+    instagram: profile.instagram,
+    bio: profile.bio,
+    places_visited: profile.placesVisited,
+    preferred_vibe: profile.preferredVibe,
+    random_requests: profile.randomRequests,
+    site_role: profile.siteRole || "member",
+    updated_at: new Date().toISOString(),
+  });
+}
+
 function usernameIsTaken(username, currentUsername = "") {
   const normalized = normalizeUsername(username);
   const current = normalizeUsername(currentUsername);
   if (!normalized || normalized === current) return false;
   const accounts = getAccountStore();
-  const demoNames = attendeePool.map((person, index) => normalizeUsername(`${person.name}${index + 11}`));
-  return Boolean(accounts[normalized]) || demoNames.includes(normalized);
+  const profileNames = publicProfiles.map((person) => normalizeUsername(person.username || person.name || ""));
+  return Boolean(accounts[normalized]) || profileNames.includes(normalized);
 }
 
 function setAuthError(message = "") {
@@ -721,18 +792,13 @@ function setAuthError(message = "") {
 }
 
 function normalizePerson(person, index = 0) {
-  const handle = person.instagram || `@${person.name.toLowerCase().replace(/\s+/g, "")}${index + 11}`;
+  const handle = person.instagram || "";
   return {
     id: person.id || person.name.toLowerCase().replace(/\s+/g, "-"),
     instagram: handle,
-    placesVisited: person.placesVisited ?? ((index % 8) + 2),
-    bio: person.bio || "Likes early starts, quiet corners, local food, and taking photos after meets.",
-    photos:
-      person.photos ||
-      [
-        "https://images.unsplash.com/photo-1500534314209-a25ddb2bd429?auto=format&fit=crop&w=500&q=80",
-        "https://images.unsplash.com/photo-1512820790803-83ca734da794?auto=format&fit=crop&w=500&q=80",
-      ],
+    placesVisited: person.placesVisited ?? 0,
+    bio: person.bio || "",
+    photos: person.photos || [],
     ...person,
   };
 }
@@ -1078,10 +1144,7 @@ function criteriaSummary(group) {
   return `<small class="criteria-note">${group.criteria.minAge}-${group.criteria.maxAge} yrs · ${gender}</small>`;
 }
 
-const defaultSiteRoles = {
-  kabir: "admin",
-  tara: "moderator",
-};
+const defaultSiteRoles = {};
 
 function getSiteRole(person) {
   if (!person) return "member";
@@ -1269,9 +1332,8 @@ function findPerson(personId) {
 function getAllProfiles() {
   const profiles = new Map();
   if (currentUser) profiles.set("me", getCurrentProfile());
-  attendeePool.forEach((person, index) => {
-    const profile = normalizePerson(person, index);
-    profiles.set(profile.id, profile);
+  publicProfiles.forEach((person) => {
+    if (person.id !== currentUser?.supabaseUserId) profiles.set(person.id, person);
   });
   spots.forEach((spot) => {
     spot.groups.forEach((group) => {
@@ -1356,17 +1418,7 @@ function getTrustedDmEntries() {
 
 function getRequestDmEntries() {
   const savedRandomDms = getDmEntries().filter((entry) => !isTrustedPerson(entry.person));
-  const savedIds = new Set(savedRandomDms.map((entry) => entry.person.id));
-  const generatedRandoms = attendeePool
-    .map((person, index) => normalizePerson(person, index))
-    .filter((person) => person.relationship === "random" && !savedIds.has(person.id))
-    .slice(0, 2)
-    .map((person) => ({
-      key: `dm-${person.id}`,
-      person,
-      messages: [{ sender: person.name, text: "Sent you a meet request based on your preferences." }],
-    }));
-  return [...savedRandomDms, ...generatedRandoms];
+  return savedRandomDms;
 }
 
 function getRelationshipLabel(person) {
@@ -1375,18 +1427,19 @@ function getRelationshipLabel(person) {
     follower: "Follows you",
     mutual: "Mutual explorer",
     random: "Request",
+    explorer: "Explorer",
   };
   return labels[person.relationship] || "Explorer";
 }
 
 function getFollowerCount(person) {
-  if (person.id === "me") return 128 + followedPeople.size;
-  return 40 + (person.name.length * 7) + (followedPeople.has(person.id) ? 1 : 0);
+  if (person.id === "me") return 0;
+  return followedPeople.has(person.id) ? 1 : 0;
 }
 
 function getFollowingCount(person) {
   if (person.id === "me") return followedPeople.size;
-  return 18 + (person.name.length * 3);
+  return 0;
 }
 
 function getMutualProfiles(person) {
@@ -1400,7 +1453,7 @@ function getMutualProfiles(person) {
 }
 
 function getMutualCount(person) {
-  if (person.id === "me") return getAllProfiles().filter((profile) => profile.relationship === "mutual").length;
+  if (person.id === "me") return 0;
   return getMutualProfiles(person).length + (person.relationship === "follower" ? 1 : 0);
 }
 
@@ -1698,15 +1751,7 @@ function openMutuals(personId) {
 
 function seedMessages(key, meta) {
   if (chatStore[key]) return chatStore[key];
-  if (meta.kind === "Direct message") {
-    chatStore[key] = [{ sender: meta.title, text: "Hey, saw your profile. Want to plan a spot sometime?" }];
-    saveObject("put1meetChats", chatStore);
-    return chatStore[key];
-  }
-  chatStore[key] = [
-    { sender: "Diya", text: `Anyone planning transport for ${meta.title}?` },
-    { sender: "Kabir", text: "I can meet near the metro and split a cab." },
-  ];
+  chatStore[key] = [];
   saveObject("put1meetChats", chatStore);
   return chatStore[key];
 }
@@ -2409,6 +2454,8 @@ authForm.addEventListener("submit", async (event) => {
     emailVerified: supabaseUser ? Boolean(supabaseUser.email_confirmed_at) : emailVerified,
     supabaseUserId: supabaseUser?.id || currentUser?.supabaseUserId || "",
   };
+  await saveProfileToSupabase(currentUser);
+  await loadPublicProfiles();
   accounts[username] = { password: password || existingPassword, user: currentUser };
   saveAccountStore(accounts);
   localStorage.setItem("put1meetUser", JSON.stringify(currentUser));
@@ -2528,6 +2575,8 @@ document.addEventListener("submit", async (event) => {
       saveSiteRoles();
     }
     saveCurrentUser();
+    await saveProfileToSupabase(currentUser);
+    await loadPublicProfiles();
     renderAuthActions();
     drawerContent.querySelector(".profile-panel")?.insertAdjacentHTML(
       "afterbegin",
@@ -2626,6 +2675,8 @@ document.addEventListener("keydown", (event) => {
   }
 });
 
+purgeDummyProfileData();
 renderSpots();
 renderAuthActions();
 syncSupabaseSession();
+
