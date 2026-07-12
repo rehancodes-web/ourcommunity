@@ -532,17 +532,15 @@ const authForm = document.querySelector("#authForm");
 const authTitle = document.querySelector("#authTitle");
 const authNote = document.querySelector("#authNote");
 const authError = document.querySelector("#authError");
-const otpBox = document.querySelector("#otpBox");
-const otpStatus = document.querySelector("#otpStatus");
-const verifiedPhone = document.querySelector("#verifiedPhone");
+const authMessage = document.querySelector("#authMessage");
 const emailVerifyBox = document.querySelector("#emailVerifyBox");
 const emailVerifyStatus = document.querySelector("#emailVerifyStatus");
 const profileSearch = document.querySelector("#profileSearch");
 const searchResults = document.querySelector("#searchResults");
 let authMode = "signup";
-let otpState = { code: "", phone: "", verified: false };
 let pendingJoin = null;
 let currentUser = JSON.parse(localStorage.getItem("put1meetUser") || "null");
+let welcomeMessage = "";
 const joinedGroups = new Set(JSON.parse(localStorage.getItem("put1meetJoinedGroups") || "[]"));
 const followedPeople = new Set(JSON.parse(localStorage.getItem("put1meetFollowedPeople") || "[]"));
 const chatStore = JSON.parse(localStorage.getItem("put1meetChats") || "{}");
@@ -684,7 +682,6 @@ function profileRowToPerson(row) {
     age: Number(row.age || 18),
     gender: row.gender || "Prefer not to say",
     email: row.email || "",
-    phone: row.phone || "",
     instagram: row.instagram || "",
     bio: row.bio || "",
     placesVisited: Number(row.places_visited || 0),
@@ -704,8 +701,6 @@ function makeSupabaseProfile(user, username = "") {
     gender: meta.gender || "Prefer not to say",
     email: user?.email || meta.email || "",
     emailVerified: Boolean(user?.email_confirmed_at),
-    phone: meta.phone || "",
-    phoneVerified: Boolean(meta.phoneVerified),
     instagram: meta.instagram || "",
     bio: meta.bio || "",
     placesVisited: Number(meta.placesVisited || 0),
@@ -736,7 +731,7 @@ async function loadPublicProfiles() {
   if (!supabaseClient) return;
   const { data, error } = await supabaseClient
     .from("profiles")
-    .select("id, username, name, age, gender, email, phone, instagram, bio, places_visited, preferred_vibe, random_requests, site_role")
+    .select("id, username, name, age, gender, email, instagram, bio, places_visited, preferred_vibe, random_requests, site_role")
     .order("created_at", { ascending: false })
     .limit(50);
   if (error || !Array.isArray(data)) return;
@@ -754,7 +749,6 @@ async function saveProfileToSupabase(profile) {
     age: profile.age,
     gender: profile.gender,
     email: profile.email,
-    phone: profile.phone,
     instagram: profile.instagram,
     bio: profile.bio,
     places_visited: profile.placesVisited,
@@ -777,6 +771,12 @@ function usernameIsTaken(username, currentUsername = "") {
 function setAuthError(message = "") {
   authError.hidden = !message;
   authError.textContent = message;
+}
+
+function setAuthMessage(message = "") {
+  if (!authMessage) return;
+  authMessage.hidden = !message;
+  authMessage.textContent = message;
 }
 
 function normalizePerson(person, index = 0) {
@@ -815,24 +815,8 @@ function isProfileComplete(user = currentUser) {
       Number(user?.placesVisited) >= 0 &&
       user?.preferredVibe &&
       user?.randomRequests &&
-      user?.phone &&
       (!isCurrentAccount || user?.email),
   );
-}
-
-function normalizePhone(phone = "") {
-  return phone.replace(/[^\d+]/g, "");
-}
-
-function phoneLooksValid(phone = "") {
-  return phone.replace(/\D/g, "").length >= 10;
-}
-
-function setOtpMessage(message, verified = false) {
-  otpStatus.textContent = message;
-  otpBox.classList.toggle("verified", verified);
-  verifiedPhone.hidden = !verified;
-  verifiedPhone.textContent = verified ? `Phone saved: ${authForm.phone.value}` : "";
 }
 
 function setEmailVerifyMessage(message, verified = false) {
@@ -842,18 +826,9 @@ function setEmailVerifyMessage(message, verified = false) {
 
 function syncVerificationUi() {
   const isCompletingExistingProfile = Boolean(currentUser);
-  const phone = normalizePhone(authForm.phone.value);
-  authForm.phone.closest("label").hidden = authMode === "signin";
-  otpBox.hidden = authMode === "signin";
   emailVerifyBox.hidden = !isCompletingExistingProfile;
 
   if (authMode === "signin") return;
-
-  if (phoneLooksValid(phone)) {
-    setOtpMessage("Phone number saved. OTP will work after SMS is configured in Supabase.", true);
-  } else {
-    setOtpMessage("Enter a valid phone number. OTP is not active yet.", false);
-  }
 
   if (!isCompletingExistingProfile) return;
   if (currentUser.emailVerified) {
@@ -874,7 +849,7 @@ function setAuthFieldVisible(name, visible) {
 
 function syncAuthModeFields() {
   const isSignin = authMode === "signin";
-  ["email", "name", "age", "gender", "phone", "instagram", "bio", "placesVisited", "preferredVibe", "randomRequests"].forEach(
+  ["email", "name", "age", "gender", "instagram", "bio", "placesVisited", "preferredVibe", "randomRequests"].forEach(
     (name) => setAuthFieldVisible(name, !isSignin),
   );
   authForm.username.disabled = false;
@@ -887,8 +862,6 @@ function syncAuthModeFields() {
   authForm.age.required = !isSignin;
   authForm.gender.required = !isSignin;
   authForm.email.required = !isSignin;
-  authForm.phone.required = !isSignin;
-  otpBox.hidden = isSignin;
   emailVerifyBox.hidden = isSignin || !currentUser;
   authForm.querySelector('button[type="submit"]').textContent = isSignin ? "Sign in" : "Continue";
 }
@@ -929,6 +902,7 @@ function renderAuthActions() {
       }
       <button class="auth-button" type="button" data-open-settings>Settings</button>
       <button class="auth-button primary-lite" type="button" data-signout>Sign out</button>
+      ${welcomeMessage ? `<span class="topbar-message">${welcomeMessage}</span>` : ""}
     `;
     return;
   }
@@ -937,6 +911,17 @@ function renderAuthActions() {
     <button class="auth-button" type="button" data-open-auth="signin">Sign in</button>
     <button class="auth-button primary-lite" type="button" data-open-auth="signup">Sign up</button>
   `;
+}
+
+function showWelcome(message) {
+  welcomeMessage = message;
+  renderAuthActions();
+  window.setTimeout(() => {
+    if (welcomeMessage === message) {
+      welcomeMessage = "";
+      renderAuthActions();
+    }
+  }, 6000);
 }
 
 function setAuthMode(mode) {
@@ -948,10 +933,11 @@ function setAuthMode(mode) {
   authNote.textContent =
     mode === "signup"
       ? currentUser
-        ? "Finish your details here. Email verification can be done now, but phone must stay verified."
-        : "Choose a username, password, and verify your phone before your account is created."
+        ? "Finish your profile details here. Email verification is handled by Supabase."
+        : "Choose a username, email, and password. Supabase will send an email verification link."
       : "Use your username and password to sign in.";
   setAuthError("");
+  setAuthMessage("");
   syncVerificationUi();
   syncAuthModeFields();
 }
@@ -964,7 +950,6 @@ function openAuth(mode = "signup") {
     authForm.age.value = currentUser.age || "";
     authForm.gender.value = currentUser.gender || "";
     authForm.email.value = currentUser.email || "";
-    authForm.phone.value = currentUser.phone || "";
     authForm.instagram.value = currentUser.instagram || "";
     authForm.bio.value = currentUser.bio || "";
     authForm.placesVisited.value = currentUser.placesVisited ?? "";
@@ -2311,7 +2296,6 @@ document.querySelectorAll(".auth-tab").forEach((tab) => {
   tab.addEventListener("click", () => setAuthMode(tab.dataset.authTab));
 });
 
-authForm.phone.addEventListener("input", syncVerificationUi);
 authForm.email.addEventListener("input", () => {
   if (!currentUser) return;
   const changedEmail = authForm.email.value.trim() !== currentUser.email;
@@ -2352,9 +2336,9 @@ authForm.addEventListener("submit", async (event) => {
     localStorage.setItem("put1meetLastUser", JSON.stringify(currentUser));
     renderAuthActions();
     hideAuth();
+    showWelcome(`Welcome back, ${currentUser.name || currentUser.username}.`);
     return;
   }
-  const phone = normalizePhone(formData.get("phone") || "");
   const username = normalizeUsername(formData.get("username"));
   const password = formData.get("password");
   const accounts = getAccountStore();
@@ -2379,11 +2363,6 @@ authForm.addEventListener("submit", async (event) => {
     authForm.password.focus();
     return;
   }
-  if (authMode === "signup" && !phoneLooksValid(phone)) {
-    setOtpMessage("Enter a valid phone number. Phone OTP is not active yet.", false);
-    authForm.phone.focus();
-    return;
-  }
   const email = formData.get("email").trim();
   const emailVerified = currentUser?.email === email ? Boolean(currentUser?.emailVerified) : false;
   const profilePayload = {
@@ -2392,8 +2371,6 @@ authForm.addEventListener("submit", async (event) => {
     age: Number(formData.get("age")),
     gender: formData.get("gender"),
     email,
-    phone: formData.get("phone").trim(),
-    phoneVerified: Boolean(currentUser?.phoneVerified),
     instagram: formData.get("instagram").trim(),
     bio: formData.get("bio").trim(),
     placesVisited: Number(formData.get("placesVisited") || 0),
@@ -2439,6 +2416,7 @@ authForm.addEventListener("submit", async (event) => {
   localStorage.setItem("put1meetLastUser", JSON.stringify(currentUser));
   renderAuthActions();
   hideAuth();
+  showWelcome(`Welcome to put1meet, ${currentUser.name || currentUser.username}. Check your inbox to verify your email.`);
 
   if (pendingJoin) {
     const match = findGroup(pendingJoin.groupId);

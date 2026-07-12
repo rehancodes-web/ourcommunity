@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>put1meet | Bangalore spots</title>
     <link rel="preconnect" href="https://images.unsplash.com" />
-    <link rel="stylesheet" href="styles.css?v=52" />
+    <link rel="stylesheet" href="styles.css?v=53" />
   </head>
   <body>
     <header class="topbar">
@@ -144,6 +144,7 @@
         <h2 id="authTitle">Create your profile</h2>
         <p id="authNote">Your name, age, and gender are shown only after you join a group.</p>
         <p class="auth-error" id="authError" hidden></p>
+        <p class="auth-message" id="authMessage" hidden></p>
         <label>
           Username
           <input name="username" autocomplete="username" placeholder="rehan07" required />
@@ -179,17 +180,6 @@
             <strong>Email verification</strong>
             <span id="emailVerifyStatus">Use the Supabase email link sent after signup.</span>
           </div>
-        </div>
-        <label class="phone-field">
-          Phone number
-          <input name="phone" type="tel" autocomplete="tel" inputmode="tel" placeholder="+91 98765 43210" required />
-        </label>
-        <div class="otp-box" id="otpBox">
-          <div>
-            <strong>Phone verification</strong>
-            <span id="otpStatus">Phone OTP is not active yet. SMS provider setup is needed in Supabase.</span>
-          </div>
-          <div class="verified-phone" id="verifiedPhone" hidden></div>
         </div>
         <label>
           Instagram
@@ -232,6 +222,6 @@
     </section>
 
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <script src="script.js?v=52"></script>
+    <script src="script.js?v=53"></script>
   </body>
 </html>
