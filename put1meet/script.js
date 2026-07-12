@@ -1029,7 +1029,7 @@ function renderSpots(filter = "all") {
               <button data-action="groups" data-id="${spot.id}">Find groups</button>
               <button data-action="tips" data-id="${spot.id}">Tips</button>
               <button data-action="reviews" data-id="${spot.id}">Reviews</button>
-              <a class="location-button" href="${spot.mapUrl}" target="_blank" rel="noopener">Location</a>
+              <button class="location-button" type="button" data-location="${spot.id}">Location</button>
             </div>
           </div>
         </article>
@@ -2007,7 +2007,7 @@ function openDrawer(spotId, action) {
         <button data-action="groups" data-id="${spot.id}">Find groups</button>
         <button data-action="tips" data-id="${spot.id}">Tips</button>
         <button data-action="reviews" data-id="${spot.id}">Reviews</button>
-        <a class="location-button" href="${spot.mapUrl}" target="_blank" rel="noopener">Location</a>
+        <button class="location-button" type="button" data-location="${spot.id}">Location</button>
       </div>
     </div>
     ${sections[activeAction]}
@@ -2024,9 +2024,18 @@ function hideDrawer() {
   drawerBackdrop.hidden = true;
 }
 
+function requireLogin(message = "Sign in or sign up first to use this.") {
+  if (currentUser) return true;
+  pendingJoin = null;
+  openAuth("signin");
+  setAuthError(message);
+  return false;
+}
+
 document.addEventListener("click", async (event) => {
   const searchedProfileButton = event.target.closest("[data-search-profile]");
   if (searchedProfileButton) {
+    if (!requireLogin("Sign in or sign up first to search and view profiles.")) return;
     profileSearch.value = "";
     searchResults.hidden = true;
     openProfile(searchedProfileButton.dataset.searchProfile);
@@ -2035,6 +2044,7 @@ document.addEventListener("click", async (event) => {
 
   const chatProfileButton = event.target.closest("[data-chat-profile]");
   if (chatProfileButton) {
+    if (!requireLogin("Sign in or sign up first to view profiles.")) return;
     hideChat();
     openProfile(chatProfileButton.dataset.chatProfile);
     return;
@@ -2042,6 +2052,7 @@ document.addEventListener("click", async (event) => {
 
   const mutualProfileButton = event.target.closest("[data-mutual-profile]");
   if (mutualProfileButton) {
+    if (!requireLogin("Sign in or sign up first to view profiles.")) return;
     hideChat();
     openProfile(mutualProfileButton.dataset.mutualProfile);
     return;
@@ -2049,12 +2060,14 @@ document.addEventListener("click", async (event) => {
 
   const openMutualsButton = event.target.closest("[data-open-mutuals]");
   if (openMutualsButton) {
+    if (!requireLogin("Sign in or sign up first to see mutuals.")) return;
     openMutuals(openMutualsButton.dataset.openMutuals);
     return;
   }
 
   const followButton = event.target.closest("[data-follow-person]");
   if (followButton) {
+    if (!requireLogin("Sign in or sign up first to follow people.")) return;
     const personId = followButton.dataset.followPerson;
     if (followedPeople.has(personId)) {
       followedPeople.delete(personId);
@@ -2068,6 +2081,7 @@ document.addEventListener("click", async (event) => {
 
   const toggleCreateGroupButton = event.target.closest("[data-toggle-create-group]");
   if (toggleCreateGroupButton) {
+    if (!requireLogin("Sign in or sign up first to make a group.")) return;
     const form = document.querySelector(
       `[data-create-group-form="${toggleCreateGroupButton.dataset.toggleCreateGroup}"]`,
     );
@@ -2077,24 +2091,28 @@ document.addEventListener("click", async (event) => {
 
   const inboxTabButton = event.target.closest("[data-inbox-tab]");
   if (inboxTabButton) {
+    if (!requireLogin("Sign in or sign up first to open messenger.")) return;
     openInbox(inboxTabButton.dataset.inboxTab);
     return;
   }
 
   const inboxButton = event.target.closest("[data-open-inbox]");
   if (inboxButton) {
+    if (!requireLogin("Sign in or sign up first to open messenger.")) return;
     openInbox();
     return;
   }
 
   const settingsButton = event.target.closest("[data-open-settings]");
   if (settingsButton) {
+    if (!requireLogin("Sign in or sign up first to open settings.")) return;
     openSettings();
     return;
   }
 
   const inboxDmButton = event.target.closest("[data-inbox-dm]");
   if (inboxDmButton) {
+    if (!requireLogin("Sign in or sign up first to open messages.")) return;
     const person = findPerson(inboxDmButton.dataset.inboxDm);
     if (person) {
       openChat(`dm-${person.id}`, {
@@ -2107,6 +2125,7 @@ document.addEventListener("click", async (event) => {
 
   const inboxGroupButton = event.target.closest("[data-inbox-group]");
   if (inboxGroupButton) {
+    if (!requireLogin("Sign in or sign up first to open group chat.")) return;
     const match = findGroup(inboxGroupButton.dataset.inboxGroup);
     if (match) {
       openChat(`group-${match.group.id}`, {
@@ -2119,6 +2138,7 @@ document.addEventListener("click", async (event) => {
 
   const acceptInviteButton = event.target.closest("[data-accept-invite]");
   if (acceptInviteButton) {
+    if (!requireLogin("Sign in or sign up first to accept invites.")) return;
     const match = findGroup(acceptInviteButton.dataset.acceptInvite);
     if (match && !canCurrentUserJoinGroup(match.group)) {
       setGroupSafetyNotice("Because your age is under 18, this meet needs at least one 18+ person before you can join.");
@@ -2135,6 +2155,7 @@ document.addEventListener("click", async (event) => {
 
   const myProfileButton = event.target.closest("[data-my-profile]");
   if (myProfileButton) {
+    if (!requireLogin("Sign in or sign up first to view your profile.")) return;
     openProfile("me");
     return;
   }
@@ -2164,6 +2185,7 @@ document.addEventListener("click", async (event) => {
 
   const groupChatButton = event.target.closest("[data-group-chat]");
   if (groupChatButton) {
+    if (!requireLogin("Sign in or sign up first to open group chat.")) return;
     const match = findGroup(groupChatButton.dataset.groupChat);
     if (match) {
       openChat(`group-${match.group.id}`, {
@@ -2176,6 +2198,7 @@ document.addEventListener("click", async (event) => {
 
   const directChatButton = event.target.closest("[data-direct-chat]");
   if (directChatButton) {
+    if (!requireLogin("Sign in or sign up first to message people.")) return;
     const person = findPerson(directChatButton.dataset.directChat);
     if (person) {
       openChat(`dm-${person.id}`, {
@@ -2188,12 +2211,14 @@ document.addEventListener("click", async (event) => {
 
   const profileButton = event.target.closest("[data-view-profile]");
   if (profileButton) {
+    if (!requireLogin("Sign in or sign up first to view profiles.")) return;
     openProfile(profileButton.dataset.viewProfile);
     return;
   }
 
   const afterMeetButton = event.target.closest("[data-after-meet]");
   if (afterMeetButton) {
+    if (!requireLogin("Sign in or sign up first to review or upload pictures.")) return;
     const panel = document.querySelector(`[data-after-panel="${afterMeetButton.dataset.afterMeet}"]`);
     if (panel) panel.hidden = !panel.hidden;
     return;
@@ -2201,6 +2226,7 @@ document.addEventListener("click", async (event) => {
 
   const photoUploadButton = event.target.closest("[data-photo-upload]");
   if (photoUploadButton) {
+    if (!requireLogin("Sign in or sign up first to upload pictures.")) return;
     const groupId = photoUploadButton.dataset.photoUpload;
     const input = document.querySelector(`[data-photo-input="${groupId}"]`);
     const file = input?.files?.[0];
@@ -2221,8 +2247,17 @@ document.addEventListener("click", async (event) => {
     return;
   }
 
+  const locationButton = event.target.closest("[data-location]");
+  if (locationButton) {
+    if (!requireLogin("Sign in or sign up first to see spot locations.")) return;
+    const spot = spots.find((item) => item.id === locationButton.dataset.location);
+    if (spot?.mapUrl) window.open(spot.mapUrl, "_blank", "noopener");
+    return;
+  }
+
   const actionButton = event.target.closest("[data-action]");
   if (actionButton) {
+    if (!requireLogin("Sign in or sign up first to use spot details.")) return;
     openDrawer(actionButton.dataset.id, actionButton.dataset.action);
     return;
   }
@@ -2242,7 +2277,7 @@ document.addEventListener("click", async (event) => {
 
     if (!currentUser) {
       pendingJoin = { groupId, spotId };
-      openAuth("signup");
+      requireLogin("Sign in or sign up first to join groups.");
       return;
     }
 
