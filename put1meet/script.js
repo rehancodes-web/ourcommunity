@@ -514,6 +514,7 @@ if (Array.isArray(savedSuggestedSpots)) {
 
 const publicProfiles = [];
 const followRows = [];
+let followGraphLoaded = false;
 
 function hydrateSpotGroups(spot, spotIndex) {
   spot.groups = [];
@@ -668,6 +669,10 @@ function normalizeUsername(username = "") {
   return username.trim().toLowerCase().replace(/[^a-z0-9_.]/g, "");
 }
 
+function isSupabaseId(value = "") {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
+}
+
 function getAccountStore() {
   return JSON.parse(localStorage.getItem("put1meetAccounts") || "{}");
 }
@@ -749,10 +754,31 @@ async function loadFollowGraph() {
     .select("follower_id, following_id")
     .limit(2000);
   if (error || !Array.isArray(data)) return;
-  followRows.splice(0, followRows.length, ...data);
+  let rows = data;
+  const localFollowIds = currentUser?.supabaseUserId ? [...followedPeople].filter((id) => isSupabaseId(id)) : [];
+  if (currentUser?.supabaseUserId && localFollowIds.length) {
+    const existing = new Set(
+      data
+        .filter((row) => row.follower_id === currentUser.supabaseUserId)
+        .map((row) => row.following_id),
+    );
+    const missingRows = localFollowIds
+      .filter((id) => id !== currentUser.supabaseUserId && !existing.has(id))
+      .map((id) => ({ follower_id: currentUser.supabaseUserId, following_id: id }));
+    if (missingRows.length) {
+      await supabaseClient.from("follows").upsert(missingRows);
+      const refreshed = await supabaseClient
+        .from("follows")
+        .select("follower_id, following_id")
+        .limit(2000);
+      if (!refreshed.error && Array.isArray(refreshed.data)) rows = refreshed.data;
+    }
+  }
+  followGraphLoaded = true;
+  followRows.splice(0, followRows.length, ...rows);
   if (currentUser?.supabaseUserId) {
     followedPeople.clear();
-    data
+    rows
       .filter((row) => row.follower_id === currentUser.supabaseUserId)
       .forEach((row) => followedPeople.add(row.following_id));
     saveFollowedPeople();
@@ -761,6 +787,7 @@ async function loadFollowGraph() {
 
 async function saveFollowToSupabase(personId, shouldFollow) {
   if (!supabaseClient || !currentUser?.supabaseUserId || !personId || personId === "me") return;
+  if (!isSupabaseId(personId)) return;
   const signedIn = await hasSupabaseSession();
   if (!signedIn) return;
   if (shouldFollow) {
@@ -1217,7 +1244,7 @@ function getSiteRole(person) {
   if (person.id === "me") {
     return currentUser?.siteRole || siteRoleStore.me || "member";
   }
-  return siteRoleStore[person.id] || person.siteRole || defaultSiteRoles[person.id] || "member";
+  return person.siteRole || siteRoleStore[person.id] || defaultSiteRoles[person.id] || "member";
 }
 
 function roleBadgeMarkup(person) {
@@ -1503,7 +1530,7 @@ function getFollowerCount(person) {
   const personId = person.id === "me" ? currentUser?.supabaseUserId : person.id;
   if (!personId) return 0;
   const syncedCount = followRows.filter((row) => row.following_id === personId).length;
-  if (syncedCount) return syncedCount;
+  if (followGraphLoaded) return syncedCount;
   return person.id !== "me" && followedPeople.has(person.id) ? 1 : 0;
 }
 
@@ -1511,7 +1538,7 @@ function getFollowingCount(person) {
   const personId = person.id === "me" ? currentUser?.supabaseUserId : person.id;
   if (!personId) return person.id === "me" ? followedPeople.size : 0;
   const syncedCount = followRows.filter((row) => row.follower_id === personId).length;
-  if (syncedCount || followRows.length) return syncedCount;
+  if (followGraphLoaded) return syncedCount;
   return person.id === "me" ? followedPeople.size : 0;
 }
 
@@ -2552,6 +2579,7 @@ authForm.addEventListener("submit", async (event) => {
     }
     await loadPublicProfiles();
     mergeSavedProfileIntoCurrentUser();
+    await loadFollowGraph();
     localStorage.setItem("put1meetUser", JSON.stringify(currentUser));
     localStorage.setItem("put1meetLastUser", JSON.stringify(currentUser));
     renderAuthActions();
@@ -2888,6 +2916,7 @@ async function initializeApp() {
   renderSpots();
   renderAuthActions();
   await loadPublicProfiles();
+  await loadFollowGraph();
   await syncSupabaseSession();
   openSharedProfileFromHash();
 }
