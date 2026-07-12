@@ -1412,7 +1412,7 @@ function getDmEntries() {
 }
 
 function isTrustedPerson(person) {
-  return ["following", "follower", "mutual"].includes(person.relationship);
+  return followedPeople.has(person.id) || person.relationship === "following" || person.relationship === "mutual";
 }
 
 function getTrustedDmEntries() {
@@ -1504,7 +1504,7 @@ function getInviteCandidates() {
         inviter,
         spot,
         group,
-        type: inviter.relationship === "random" ? "request" : "invite",
+        type: isTrustedPerson(inviter) ? "invite" : "request",
       };
     });
 }
@@ -1657,7 +1657,7 @@ function openSettings() {
           <label>
             Who can message me
             <select name="allowDmFrom">
-              <option value="followers" ${settings.allowDmFrom === "followers" ? "selected" : ""}>Followers and mutuals</option>
+              <option value="followers" ${settings.allowDmFrom === "followers" ? "selected" : ""}>People I follow</option>
               <option value="groups" ${settings.allowDmFrom === "groups" ? "selected" : ""}>People in my groups</option>
               <option value="everyone" ${settings.allowDmFrom === "everyone" ? "selected" : ""}>Everyone</option>
             </select>
@@ -1668,7 +1668,7 @@ function openSettings() {
           <label>
             Meet invites
             <select name="inviteSource">
-              <option value="followers" ${settings.inviteSource === "followers" ? "selected" : ""}>Followers and mutuals</option>
+              <option value="followers" ${settings.inviteSource === "followers" ? "selected" : ""}>People I follow</option>
               <option value="groups" ${settings.inviteSource === "groups" ? "selected" : ""}>People in my groups</option>
               <option value="everyone" ${settings.inviteSource === "everyone" ? "selected" : ""}>Everyone including requests</option>
             </select>
@@ -1687,8 +1687,8 @@ function openSettings() {
           <label>
             Random requests
             <select name="randomRequests">
-              <option value="yes" ${settings.randomRequests === "yes" ? "selected" : ""}>Show requests matching my preferences</option>
-              <option value="no" ${settings.randomRequests === "no" ? "selected" : ""}>Only people I follow or who follow me</option>
+              <option value="yes" ${settings.randomRequests === "yes" ? "selected" : ""}>Put everyone else in Requests</option>
+              <option value="no" ${settings.randomRequests === "no" ? "selected" : ""}>Hide people I do not follow</option>
             </select>
           </label>
         </section>
@@ -2510,6 +2510,9 @@ authForm.addEventListener("submit", async (event) => {
         placesVisited: 0,
         preferredVibe: "heritage",
         randomRequests: "yes",
+        profileVisibility: "everyone",
+        allowDmFrom: "followers",
+        inviteSource: "followers",
       };
     }
     const accounts = getAccountStore();
