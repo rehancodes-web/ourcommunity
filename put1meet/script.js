@@ -513,6 +513,7 @@ if (Array.isArray(savedSuggestedSpots)) {
 }
 
 const publicProfiles = [];
+const followRows = [];
 
 function hydrateSpotGroups(spot, spotIndex) {
   spot.groups = [];
@@ -718,6 +719,7 @@ async function syncSupabaseSession() {
   currentUser = { ...(currentUser || {}), ...makeSupabaseProfile(data.session.user, currentUser?.username) };
   await loadPublicProfiles();
   mergeSavedProfileIntoCurrentUser();
+  await loadFollowGraph();
   localStorage.setItem("put1meetUser", JSON.stringify(currentUser));
   localStorage.setItem("put1meetLastUser", JSON.stringify(currentUser));
   renderAuthActions();
@@ -738,6 +740,56 @@ async function loadPublicProfiles() {
     .limit(50);
   if (error || !Array.isArray(data)) return;
   publicProfiles.splice(0, publicProfiles.length, ...data.map(profileRowToPerson));
+}
+
+async function loadFollowGraph() {
+  if (!supabaseClient) return;
+  const { data, error } = await supabaseClient
+    .from("follows")
+    .select("follower_id, following_id")
+    .limit(2000);
+  if (error || !Array.isArray(data)) return;
+  followRows.splice(0, followRows.length, ...data);
+  if (currentUser?.supabaseUserId) {
+    followedPeople.clear();
+    data
+      .filter((row) => row.follower_id === currentUser.supabaseUserId)
+      .forEach((row) => followedPeople.add(row.following_id));
+    saveFollowedPeople();
+  }
+}
+
+async function saveFollowToSupabase(personId, shouldFollow) {
+  if (!supabaseClient || !currentUser?.supabaseUserId || !personId || personId === "me") return;
+  const signedIn = await hasSupabaseSession();
+  if (!signedIn) return;
+  if (shouldFollow) {
+    await supabaseClient.from("follows").upsert({
+      follower_id: currentUser.supabaseUserId,
+      following_id: personId,
+    });
+  } else {
+    await supabaseClient
+      .from("follows")
+      .delete()
+      .eq("follower_id", currentUser.supabaseUserId)
+      .eq("following_id", personId);
+  }
+  await loadFollowGraph();
+}
+
+async function saveSiteRolesToSupabase() {
+  if (!supabaseClient || !canManageSiteRoles()) return;
+  const signedIn = await hasSupabaseSession();
+  if (!signedIn) return;
+  await Promise.all(
+    Object.entries(siteRoleStore).map(([personId, role]) =>
+      supabaseClient
+        .from("profiles")
+        .update({ site_role: role, updated_at: new Date().toISOString() })
+        .eq("id", personId),
+    ),
+  );
 }
 
 function mergeSavedProfileIntoCurrentUser() {
@@ -913,6 +965,8 @@ function profileInitials(user) {
 
 function renderAuthActions() {
   if (!authActions) return;
+  document.body.classList.toggle("is-signed-in", Boolean(currentUser));
+  document.body.classList.toggle("is-guest", !currentUser);
   if (currentUser) {
     const profile = getCurrentProfile();
     const displayName = profile.name || profile.username || currentUser.email || "Profile";
@@ -1446,13 +1500,19 @@ function getRelationshipLabel(person) {
 }
 
 function getFollowerCount(person) {
-  if (person.id === "me") return 0;
-  return followedPeople.has(person.id) ? 1 : 0;
+  const personId = person.id === "me" ? currentUser?.supabaseUserId : person.id;
+  if (!personId) return 0;
+  const syncedCount = followRows.filter((row) => row.following_id === personId).length;
+  if (syncedCount) return syncedCount;
+  return person.id !== "me" && followedPeople.has(person.id) ? 1 : 0;
 }
 
 function getFollowingCount(person) {
-  if (person.id === "me") return followedPeople.size;
-  return 0;
+  const personId = person.id === "me" ? currentUser?.supabaseUserId : person.id;
+  if (!personId) return person.id === "me" ? followedPeople.size : 0;
+  const syncedCount = followRows.filter((row) => row.follower_id === personId).length;
+  if (syncedCount || followRows.length) return syncedCount;
+  return person.id === "me" ? followedPeople.size : 0;
 }
 
 function getMutualProfiles(person) {
@@ -2111,12 +2171,15 @@ document.addEventListener("click", async (event) => {
   if (followButton) {
     if (!requireLogin("Sign in or sign up first to follow people.")) return;
     const personId = followButton.dataset.followPerson;
+    let shouldFollow = false;
     if (followedPeople.has(personId)) {
       followedPeople.delete(personId);
     } else {
       followedPeople.add(personId);
+      shouldFollow = true;
     }
     saveFollowedPeople();
+    await saveFollowToSupabase(personId, shouldFollow);
     openProfile(personId);
     return;
   }
@@ -2705,6 +2768,7 @@ document.addEventListener("submit", async (event) => {
         }
       }
       saveSiteRoles();
+      await saveSiteRolesToSupabase();
     }
     saveCurrentUser();
     await saveProfileToSupabase(currentUser);

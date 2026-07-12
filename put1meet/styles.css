@@ -1611,29 +1611,71 @@ select {
   .topbar {
     align-items: flex-start;
     flex-direction: column;
+    gap: 10px;
+    padding: 10px 16px;
   }
 
   .nav-shell {
+    flex: 0 0 auto;
     width: 100%;
     align-items: flex-start;
     flex-direction: column;
+    gap: 10px;
+    justify-content: flex-start;
+  }
+
+  nav {
+    gap: 18px;
   }
 
   .auth-actions {
     width: 100%;
     flex-wrap: wrap;
+    gap: 6px;
   }
 
   .profile-search {
     width: 100%;
+    flex: 0 0 auto;
+  }
+
+  .profile-search input {
+    min-height: 38px;
   }
 
   .auth-button {
     flex: 1;
+    min-height: 42px;
+    padding: 10px 12px;
   }
 
   .profile-chip {
     flex: 1 1 100%;
+  }
+
+  body.is-signed-in .topbar {
+    position: sticky;
+  }
+
+  body.is-signed-in .nav-shell {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+
+  body.is-signed-in .auth-actions {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  body.is-signed-in .messenger-button,
+  body.is-signed-in .profile-chip,
+  body.is-signed-in .auth-button {
+    min-width: 0;
+    width: 100%;
+  }
+
+  body.is-signed-in .topbar-message {
+    grid-column: 1 / -1;
   }
 
   .chat-form,
