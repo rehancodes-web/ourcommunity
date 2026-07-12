@@ -1319,6 +1319,8 @@ function findGroup(groupId) {
 
 function findPerson(personId) {
   if (personId === "me" && currentUser) return getCurrentProfile();
+  const publicProfile = publicProfiles.find((person) => person.id === personId);
+  if (publicProfile) return publicProfile;
   for (const spot of spots) {
     for (const group of spot.groups) {
       const person = getGroupAttendees(group, false).find((item) => item.id === personId);
@@ -1351,7 +1353,7 @@ function renderProfileSearch(query) {
   }
   const matches = getAllProfiles()
     .filter((person) =>
-      [person.name, person.instagram, person.bio, person.relationship]
+      [person.name, person.username, person.instagram, person.bio, person.relationship]
         .filter(Boolean)
         .some((value) => String(value).toLowerCase().includes(term)),
     )
@@ -2803,6 +2805,7 @@ async function initializeApp() {
   purgeDummyProfileData();
   renderSpots();
   renderAuthActions();
+  await loadPublicProfiles();
   await syncSupabaseSession();
   openSharedProfileFromHash();
 }
