@@ -884,7 +884,10 @@ function syncAuthModeFields() {
   authForm.gender.required = isProfile;
   authForm.querySelector('button[type="submit"]').textContent = isSignin ? "Sign in" : isSignup ? "Create account" : "Save profile";
   const forgotButton = authForm.querySelector("[data-forgot-password]");
-  if (forgotButton) forgotButton.hidden = !isSignin;
+  if (forgotButton) {
+    forgotButton.hidden = !isSignin;
+    forgotButton.style.display = isSignin ? "inline" : "none";
+  }
   emailVerifyBox.hidden = true;
 }
 
@@ -1522,6 +1525,11 @@ function getMessengerNotificationCount() {
   );
 }
 
+function profileShareUrl(person) {
+  const baseUrl = window.location.href.split("#")[0];
+  return `${baseUrl}#profile=${encodeURIComponent(person.id)}`;
+}
+
 function openProfile(personId) {
   const person = findPerson(personId);
   if (!person) return;
@@ -1562,6 +1570,7 @@ function openProfile(personId) {
         </div>
       </div>
       <div class="profile-actions">
+        <button class="mini-button secondary" data-share-profile="${person.id}">Share profile</button>
         ${
           isMe
             ? '<button class="mini-button secondary" data-complete-profile>Complete profile</button>'
@@ -1778,7 +1787,8 @@ function cleanDirectMessageSeed(key, meta) {
 function openChat(key, meta) {
   if (!currentUser) {
     pendingJoin = null;
-    openAuth("signup");
+    openAuth("signin");
+    setAuthError("Sign in or sign up first to open messages.");
     return;
   }
   activeChatKey = key;
@@ -2209,6 +2219,32 @@ document.addEventListener("click", async (event) => {
   if (myProfileButton) {
     if (!requireLogin("Sign in or sign up first to view your profile.")) return;
     openProfile("me");
+    return;
+  }
+
+  const shareProfileButton = event.target.closest("[data-share-profile]");
+  if (shareProfileButton) {
+    if (!requireLogin("Sign in or sign up first to share profiles.")) return;
+    const person = findPerson(shareProfileButton.dataset.shareProfile);
+    if (!person) return;
+    const shareData = {
+      title: `${person.name || person.username} on put1meet`,
+      text: `Check out ${person.name || person.username}'s put1meet profile.`,
+      url: profileShareUrl(person),
+    };
+    try {
+      if (navigator.share) {
+        await navigator.share(shareData);
+      } else if (navigator.clipboard) {
+        await navigator.clipboard.writeText(shareData.url);
+        drawerContent.querySelector(".profile-panel")?.insertAdjacentHTML(
+          "afterbegin",
+          '<p class="complete-warning">Profile link copied.</p>',
+        );
+      }
+    } catch {
+      if (navigator.clipboard) await navigator.clipboard.writeText(shareData.url);
+    }
     return;
   }
 
@@ -2724,10 +2760,7 @@ document.addEventListener("submit", async (event) => {
   const reviewForm = event.target.closest("[data-review-form]");
   if (reviewForm) {
     event.preventDefault();
-    if (!currentUser) {
-      openAuth("signup");
-      return;
-    }
+    if (!requireLogin("Sign in or sign up first to leave a review.")) return;
     const groupId = reviewForm.dataset.reviewForm;
     const formData = new FormData(reviewForm);
     reviewStore[groupId] = [
@@ -2753,8 +2786,27 @@ document.addEventListener("keydown", (event) => {
   }
 });
 
-purgeDummyProfileData();
-renderSpots();
-renderAuthActions();
-syncSupabaseSession();
+function openSharedProfileFromHash() {
+  const hash = window.location.hash || "";
+  const match = hash.match(/^#profile=(.+)$/);
+  if (!match) return;
+  const profileId = decodeURIComponent(match[1]);
+  if (!currentUser) {
+    openAuth("signin");
+    setAuthError("Sign in or sign up first to view shared profiles.");
+    return;
+  }
+  openProfile(profileId);
+}
+
+async function initializeApp() {
+  purgeDummyProfileData();
+  renderSpots();
+  renderAuthActions();
+  await syncSupabaseSession();
+  openSharedProfileFromHash();
+}
+
+window.addEventListener("hashchange", openSharedProfileFromHash);
+initializeApp();
 

@@ -1136,6 +1136,10 @@ select {
   text-align: left;
 }
 
+.forgot-password[hidden] {
+  display: none;
+}
+
 .link-button:hover {
   text-decoration: underline;
 }
