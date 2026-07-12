@@ -696,9 +696,9 @@ function makeSupabaseProfile(user, username = "") {
   const meta = user?.user_metadata || {};
   return {
     username: meta.username || username || "",
-    name: meta.name || meta.full_name || username || "Explorer",
-    age: Number(meta.age || 18),
-    gender: meta.gender || "Prefer not to say",
+    name: meta.name || meta.full_name || "",
+    age: meta.age ? Number(meta.age) : "",
+    gender: meta.gender || "",
     email: user?.email || meta.email || "",
     emailVerified: Boolean(user?.email_confirmed_at),
     instagram: meta.instagram || "",
@@ -715,9 +715,10 @@ async function syncSupabaseSession() {
   const { data } = await supabaseClient.auth.getSession();
   if (!data?.session?.user) return;
   currentUser = { ...(currentUser || {}), ...makeSupabaseProfile(data.session.user, currentUser?.username) };
+  await loadPublicProfiles();
+  mergeSavedProfileIntoCurrentUser();
   localStorage.setItem("put1meetUser", JSON.stringify(currentUser));
   localStorage.setItem("put1meetLastUser", JSON.stringify(currentUser));
-  await loadPublicProfiles();
   renderAuthActions();
 }
 
@@ -736,6 +737,29 @@ async function loadPublicProfiles() {
     .limit(50);
   if (error || !Array.isArray(data)) return;
   publicProfiles.splice(0, publicProfiles.length, ...data.map(profileRowToPerson));
+}
+
+function mergeSavedProfileIntoCurrentUser() {
+  if (!currentUser) return;
+  const savedProfile = publicProfiles.find(
+    (person) =>
+      (currentUser.supabaseUserId && person.id === currentUser.supabaseUserId) ||
+      (currentUser.email && person.email === currentUser.email),
+  );
+  if (!savedProfile) return;
+  currentUser = {
+    ...currentUser,
+    username: savedProfile.username || currentUser.username,
+    name: savedProfile.name || currentUser.name,
+    age: savedProfile.age || currentUser.age,
+    gender: savedProfile.gender || currentUser.gender,
+    instagram: savedProfile.instagram || currentUser.instagram,
+    bio: savedProfile.bio || currentUser.bio,
+    placesVisited: savedProfile.placesVisited ?? currentUser.placesVisited,
+    preferredVibe: savedProfile.preferredVibe || currentUser.preferredVibe,
+    randomRequests: savedProfile.randomRequests || currentUser.randomRequests,
+    siteRole: savedProfile.siteRole || currentUser.siteRole,
+  };
 }
 
 async function saveProfileToSupabase(profile) {
@@ -810,7 +834,11 @@ function getCurrentProfile() {
 function isProfileComplete(user = currentUser) {
   const isCurrentAccount = Boolean(user && (user === currentUser || user.id === "me"));
   return Boolean(
-    user?.instagram &&
+    user?.username &&
+      user?.name &&
+      Number(user?.age) >= 13 &&
+      user?.gender &&
+      user?.instagram &&
       user?.bio &&
       Number(user?.placesVisited) >= 0 &&
       user?.preferredVibe &&
@@ -825,17 +853,7 @@ function setEmailVerifyMessage(message, verified = false) {
 }
 
 function syncVerificationUi() {
-  const isCompletingExistingProfile = Boolean(currentUser);
-  emailVerifyBox.hidden = !isCompletingExistingProfile;
-
-  if (authMode === "signin") return;
-
-  if (!isCompletingExistingProfile) return;
-  if (currentUser.emailVerified) {
-    setEmailVerifyMessage(`Verified: ${currentUser.email}`, true);
-  } else {
-    setEmailVerifyMessage("Check your inbox for the Supabase verification email.", false);
-  }
+  emailVerifyBox.hidden = true;
 }
 
 function setAuthFieldVisible(name, visible) {
@@ -849,21 +867,25 @@ function setAuthFieldVisible(name, visible) {
 
 function syncAuthModeFields() {
   const isSignin = authMode === "signin";
-  ["email", "name", "age", "gender", "instagram", "bio", "placesVisited", "preferredVibe", "randomRequests"].forEach(
-    (name) => setAuthFieldVisible(name, !isSignin),
+  const isSignup = authMode === "signup";
+  const isProfile = authMode === "profile";
+  ["username", "name", "age", "gender", "instagram", "bio", "placesVisited", "preferredVibe", "randomRequests"].forEach(
+    (name) => setAuthFieldVisible(name, isProfile),
   );
-  authForm.username.disabled = false;
-  authForm.username.required = true;
-  authForm.password.disabled = false;
-  authForm.password.required = isSignin || !currentUser;
+  setAuthFieldVisible("email", isSignin || isSignup);
+  setAuthFieldVisible("password", isSignin || isSignup);
+  authForm.email.required = isSignin || isSignup;
+  authForm.password.required = isSignin || isSignup;
   authForm.password.autocomplete = isSignin ? "current-password" : "new-password";
   authForm.password.placeholder = isSignin ? "Your password" : "Make a password";
-  authForm.name.required = !isSignin;
-  authForm.age.required = !isSignin;
-  authForm.gender.required = !isSignin;
-  authForm.email.required = !isSignin;
-  emailVerifyBox.hidden = isSignin || !currentUser;
-  authForm.querySelector('button[type="submit"]').textContent = isSignin ? "Sign in" : "Continue";
+  authForm.username.required = isProfile;
+  authForm.name.required = isProfile;
+  authForm.age.required = isProfile;
+  authForm.gender.required = isProfile;
+  authForm.querySelector('button[type="submit"]').textContent = isSignin ? "Sign in" : isSignup ? "Create account" : "Save profile";
+  const forgotButton = authForm.querySelector("[data-forgot-password]");
+  if (forgotButton) forgotButton.hidden = !isSignin;
+  emailVerifyBox.hidden = true;
 }
 
 function profileInitials(user) {
@@ -879,12 +901,7 @@ function renderAuthActions() {
   if (!authActions) return;
   if (currentUser) {
     const profile = getCurrentProfile();
-    if (!profile?.name) {
-      currentUser = null;
-      localStorage.removeItem("put1meetUser");
-      renderAuthActions();
-      return;
-    }
+    const displayName = profile.name || profile.username || currentUser.email || "Profile";
     const notificationCount = getMessengerNotificationCount();
     authActions.innerHTML = `
       <button class="messenger-button" type="button" data-open-inbox aria-label="Open messenger">
@@ -893,7 +910,7 @@ function renderAuthActions() {
       </button>
       <button class="profile-chip" type="button" data-my-profile>
         <span class="avatar">${profileInitials(profile)}</span>
-        <span>${profile.name}${roleBadgeMarkup(profile)}</span>
+        <span>${displayName}${roleBadgeMarkup(profile)}</span>
       </button>
       ${
         isProfileComplete()
@@ -925,17 +942,20 @@ function showWelcome(message) {
 }
 
 function setAuthMode(mode) {
-  authMode = mode;
+  authMode = mode || "signup";
+  const authTabs = document.querySelector(".auth-tabs");
+  if (authTabs) authTabs.hidden = authMode === "profile";
   document.querySelectorAll(".auth-tab").forEach((tab) => {
-    tab.classList.toggle("active", tab.dataset.authTab === mode);
+    tab.classList.toggle("active", tab.dataset.authTab === authMode);
   });
-  authTitle.textContent = mode === "signup" ? (currentUser ? "Complete your profile" : "Create your profile") : "Sign in";
+  authTitle.textContent =
+    authMode === "signin" ? "Sign in" : authMode === "profile" ? "Complete your profile" : "Create your account";
   authNote.textContent =
-    mode === "signup"
-      ? currentUser
-        ? "Finish your profile details here. Email verification is handled by Supabase."
-        : "Choose a username, email, and password. Supabase will send an email verification link."
-      : "Use your username and password to sign in.";
+    authMode === "signin"
+      ? "Use the email and password you signed up with."
+      : authMode === "profile"
+        ? "Add the details people need before you join or make groups."
+        : "Use only your email and a password for now. Profile details come next.";
   setAuthError("");
   setAuthMessage("");
   syncVerificationUi();
@@ -1677,6 +1697,14 @@ function openSettings() {
           </label>
         </section>
         <section class="settings-block">
+          <h4>Password</h4>
+          <label>
+            New password
+            <input name="newPassword" type="password" autocomplete="new-password" placeholder="At least 6 characters">
+          </label>
+          <button class="mini-button secondary" type="button" data-change-password>Change password</button>
+        </section>
+        <section class="settings-block">
           <h4>Website role</h4>
           <p class="role-current">${roleBadgeMarkup(getCurrentProfile()) || '<span class="role-badge member">member</span>'} ${siteRoleDescription(getCurrentProfile())}</p>
           ${canManageSiteRoles() ? siteRoleManagerMarkup() : '<p class="muted-small">Only the website owner can change admin and moderator roles.</p>'}
@@ -2011,6 +2039,14 @@ function requireLogin(message = "Sign in or sign up first to use this.") {
   return false;
 }
 
+function requireCompleteProfile(message = "Complete your profile before joining or making groups.") {
+  if (!currentUser) return requireLogin("Sign in or sign up first.");
+  if (isProfileComplete()) return true;
+  openAuth("profile");
+  setAuthError(message);
+  return false;
+}
+
 document.addEventListener("click", async (event) => {
   const searchedProfileButton = event.target.closest("[data-search-profile]");
   if (searchedProfileButton) {
@@ -2089,6 +2125,43 @@ document.addEventListener("click", async (event) => {
     return;
   }
 
+  const changePasswordButton = event.target.closest("[data-change-password]");
+  if (changePasswordButton) {
+    if (!requireLogin("Sign in or sign up first to change your password.")) return;
+    const passwordInput = drawerContent.querySelector('input[name="newPassword"]');
+    const newPassword = String(passwordInput?.value || "");
+    drawerContent.querySelector(".complete-warning")?.remove();
+    if (newPassword.length < 6) {
+      drawerContent.querySelector(".profile-panel")?.insertAdjacentHTML(
+        "afterbegin",
+        '<p class="complete-warning">New password needs at least 6 characters.</p>',
+      );
+      passwordInput?.focus();
+      return;
+    }
+    if (!supabaseClient || !(await hasSupabaseSession())) {
+      drawerContent.querySelector(".profile-panel")?.insertAdjacentHTML(
+        "afterbegin",
+        '<p class="complete-warning">Sign in again before changing your password.</p>',
+      );
+      return;
+    }
+    const { error } = await supabaseClient.auth.updateUser({ password: newPassword });
+    if (error) {
+      drawerContent.querySelector(".profile-panel")?.insertAdjacentHTML(
+        "afterbegin",
+        `<p class="complete-warning">${error.message || "Could not change password."}</p>`,
+      );
+      return;
+    }
+    passwordInput.value = "";
+    drawerContent.querySelector(".profile-panel")?.insertAdjacentHTML(
+      "afterbegin",
+      '<p class="complete-warning">Password changed.</p>',
+    );
+    return;
+  }
+
   const inboxDmButton = event.target.closest("[data-inbox-dm]");
   if (inboxDmButton) {
     if (!requireLogin("Sign in or sign up first to open messages.")) return;
@@ -2141,7 +2214,7 @@ document.addEventListener("click", async (event) => {
 
   const completeProfileButton = event.target.closest("[data-complete-profile]");
   if (completeProfileButton) {
-    openAuth("signup");
+    openAuth("profile");
     return;
   }
 
@@ -2260,6 +2333,12 @@ document.addEventListener("click", async (event) => {
       return;
     }
 
+    if (!isProfileComplete()) {
+      pendingJoin = { groupId, spotId };
+      requireCompleteProfile("Complete your profile before joining this group.");
+      return;
+    }
+
     if (joinedGroups.has(groupId)) {
       joinedGroups.delete(groupId);
     } else {
@@ -2305,44 +2384,111 @@ authForm.email.addEventListener("input", () => {
   );
 });
 
+authForm.addEventListener("click", async (event) => {
+  const forgotButton = event.target.closest("[data-forgot-password]");
+  if (!forgotButton) return;
+  const email = String(authForm.email.value || "").trim().toLowerCase();
+  setAuthError("");
+  setAuthMessage("");
+  if (!email) {
+    setAuthError("Enter your email first, then press Forgot password.");
+    authForm.email.focus();
+    return;
+  }
+  if (!supabaseClient) {
+    setAuthError("Password reset needs Supabase to be connected.");
+    return;
+  }
+  const redirectTo = window.location.href.split("#")[0];
+  const { error } = await supabaseClient.auth.resetPasswordForEmail(email, { redirectTo });
+  if (error) {
+    setAuthError(error.message || "Could not send the reset email.");
+    return;
+  }
+  setAuthMessage("Password reset email sent. Check your inbox.");
+});
+
 authForm.addEventListener("submit", async (event) => {
   event.preventDefault();
   const formData = new FormData(authForm);
+  const email = String(formData.get("email") || "").trim().toLowerCase();
+  const password = String(formData.get("password") || "");
+
   if (authMode === "signin") {
-    const username = normalizeUsername(formData.get("username"));
-    const rawLogin = String(formData.get("username") || "").trim();
-    const password = formData.get("password");
-    const account = getAccountStore()[username];
+    if (!email || !password) {
+      setAuthError("Enter your email and password.");
+      return;
+    }
     if (supabaseClient) {
-      const email = account?.user?.email || (rawLogin.includes("@") ? rawLogin : "");
-      if (!email) {
-        setAuthError("Use your email once on this device, then username sign in will work too.");
-        return;
-      }
       const { data, error } = await supabaseClient.auth.signInWithPassword({ email, password });
       if (error) {
         setAuthError(error.message || "Email or password is wrong.");
         return;
       }
-      currentUser = { ...(account?.user || {}), ...makeSupabaseProfile(data.user, username) };
+      currentUser = makeSupabaseProfile(data.user);
     } else {
+      const account = Object.values(getAccountStore()).find((item) => item.user?.email === email);
       if (!account || account.password !== password) {
-        setAuthError("Username or password is wrong.");
+        setAuthError("Email or password is wrong.");
         return;
       }
       currentUser = account.user;
     }
+    await loadPublicProfiles();
+    mergeSavedProfileIntoCurrentUser();
     localStorage.setItem("put1meetUser", JSON.stringify(currentUser));
     localStorage.setItem("put1meetLastUser", JSON.stringify(currentUser));
     renderAuthActions();
     hideAuth();
-    showWelcome(`Welcome back, ${currentUser.name || currentUser.username}.`);
+    showWelcome(`Welcome back, ${currentUser.name || currentUser.username || currentUser.email}.`);
+    return;
+  }
+
+  if (authMode === "signup") {
+    if (!email || password.length < 6) {
+      setAuthError("Use a real email and a password with at least 6 characters.");
+      return;
+    }
+    if (supabaseClient) {
+      const { data, error } = await supabaseClient.auth.signUp({ email, password });
+      if (error) {
+        setAuthError(error.message || "Could not create your account.");
+        return;
+      }
+      currentUser = makeSupabaseProfile(data.user || { id: `email-${Date.now()}`, email, user_metadata: {} });
+    } else {
+      currentUser = {
+        id: `local-${Date.now()}`,
+        username: "",
+        name: "",
+        age: "",
+        gender: "",
+        email,
+        emailVerified: false,
+        instagram: "",
+        bio: "",
+        placesVisited: 0,
+        preferredVibe: "heritage",
+        randomRequests: "yes",
+      };
+    }
+    const accounts = getAccountStore();
+    accounts[email] = { password, user: currentUser };
+    saveAccountStore(accounts);
+    saveCurrentUser();
+    renderAuthActions();
+    hideAuth();
+    showWelcome("Account created. Complete your profile before joining a meet.");
+    window.setTimeout(() => openAuth("profile"), 400);
+    return;
+  }
+
+  if (authMode !== "profile") return;
+  if (!currentUser) {
+    setAuthError("Sign up or sign in first.");
     return;
   }
   const username = normalizeUsername(formData.get("username"));
-  const password = formData.get("password");
-  const accounts = getAccountStore();
-  const existingPassword = accounts[normalizeUsername(currentUser?.username)]?.password || "";
   if (username.length < 3) {
     setAuthError("Username needs at least 3 letters or numbers.");
     authForm.username.focus();
@@ -2353,48 +2499,25 @@ authForm.addEventListener("submit", async (event) => {
     authForm.username.focus();
     return;
   }
-  if (!currentUser && String(password).length < 6) {
-    setAuthError("Password needs at least 6 characters.");
-    authForm.password.focus();
-    return;
-  }
-  if (currentUser && password && String(password).length < 6) {
-    setAuthError("New password needs at least 6 characters.");
-    authForm.password.focus();
-    return;
-  }
-  const email = formData.get("email").trim();
-  const emailVerified = currentUser?.email === email ? Boolean(currentUser?.emailVerified) : false;
   const profilePayload = {
     username,
     name: formData.get("name").trim(),
     age: Number(formData.get("age")),
     gender: formData.get("gender"),
-    email,
+    email: currentUser.email || "",
     instagram: formData.get("instagram").trim(),
     bio: formData.get("bio").trim(),
     placesVisited: Number(formData.get("placesVisited") || 0),
     preferredVibe: formData.get("preferredVibe"),
     randomRequests: formData.get("randomRequests"),
   };
+  if (!profilePayload.name || Number(profilePayload.age) < 13 || !profilePayload.gender) {
+    setAuthError("Add your name, age, and gender before saving.");
+    return;
+  }
   let supabaseUser = null;
-  const signedIntoSupabase = await hasSupabaseSession();
-  const shouldCreateSupabaseAccount = supabaseClient && (!currentUser || !signedIntoSupabase || !currentUser.supabaseUserId);
-  if (shouldCreateSupabaseAccount) {
-    const { data, error } = await supabaseClient.auth.signUp({
-      email,
-      password: password || existingPassword,
-      options: { data: profilePayload },
-    });
-    if (error) {
-      setAuthError(error.message || "Could not create your Supabase account.");
-      return;
-    }
-    supabaseUser = data.user;
-  } else if (supabaseClient && currentUser) {
+  if (supabaseClient && (await hasSupabaseSession())) {
     const updatePayload = { data: profilePayload };
-    if (email && email !== currentUser.email) updatePayload.email = email;
-    if (password) updatePayload.password = password;
     const { data, error } = await supabaseClient.auth.updateUser(updatePayload);
     if (error) {
       setAuthError(error.message || "Could not update your Supabase profile.");
@@ -2405,18 +2528,16 @@ authForm.addEventListener("submit", async (event) => {
   currentUser = {
     ...(currentUser || {}),
     ...profilePayload,
-    emailVerified: supabaseUser ? Boolean(supabaseUser.email_confirmed_at) : emailVerified,
+    emailVerified: supabaseUser ? Boolean(supabaseUser.email_confirmed_at) : Boolean(currentUser.emailVerified),
     supabaseUserId: supabaseUser?.id || currentUser?.supabaseUserId || "",
   };
   await saveProfileToSupabase(currentUser);
   await loadPublicProfiles();
-  accounts[username] = { password: password || existingPassword, user: currentUser };
-  saveAccountStore(accounts);
   localStorage.setItem("put1meetUser", JSON.stringify(currentUser));
   localStorage.setItem("put1meetLastUser", JSON.stringify(currentUser));
   renderAuthActions();
   hideAuth();
-  showWelcome(`Welcome to put1meet, ${currentUser.name || currentUser.username}. Check your inbox to verify your email.`);
+  showWelcome(`Profile saved, ${currentUser.name || currentUser.username}.`);
 
   if (pendingJoin) {
     const match = findGroup(pendingJoin.groupId);
@@ -2543,8 +2664,10 @@ document.addEventListener("submit", async (event) => {
   const createGroupForm = event.target.closest("[data-create-group-form]");
   if (createGroupForm) {
     event.preventDefault();
-    if (!currentUser) {
-      openAuth("signup");
+    if (!requireLogin("Sign in or sign up first to make a group.")) {
+      return;
+    }
+    if (!requireCompleteProfile("Complete your profile before making a group.")) {
       return;
     }
     const spot = spots.find((item) => item.id === createGroupForm.dataset.createGroupForm);
