@@ -1550,15 +1550,19 @@ function openProfile(personId) {
   const isMe = person.id === "me";
   const isFollowing = followedPeople.has(person.id);
   const mutualCount = getMutualCount(person);
+  const displayUsername = person.username ? `@${person.username.replace(/^@/, "")}` : person.instagram || "Username not added";
   drawerContent.innerHTML = `
     <div class="profile-panel">
       ${!isProfileComplete(person) ? '<p class="complete-warning">Complete your profile so people know who they are meeting.</p>' : ""}
       <div class="insta-profile-head">
-        <span class="profile-avatar">${profileInitials(person)}</span>
+        <div class="profile-avatar-column">
+          <span class="profile-avatar">${profileInitials(person)}</span>
+          <strong class="profile-real-name">${person.name || "Name not added"}</strong>
+        </div>
         <div class="profile-main">
           <div class="profile-title-row">
             <div>
-              <h3>${person.name}${roleBadgeMarkup(person)}</h3>
+              <h3>${displayUsername}${roleBadgeMarkup(person)}</h3>
               <span>${person.instagram || "Instagram not added"}</span>
             </div>
             ${
@@ -1590,7 +1594,6 @@ function openProfile(personId) {
             ? '<button class="mini-button secondary" data-complete-profile>Complete profile</button>'
             : `
               <button class="mini-button secondary" data-direct-chat="${person.id}">Message</button>
-              <button class="mini-button" data-view-profile="${person.id}">Mutuals</button>
             `
         }
       </div>
