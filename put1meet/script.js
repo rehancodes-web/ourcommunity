@@ -514,19 +514,7 @@ if (Array.isArray(savedSuggestedSpots)) {
 const publicProfiles = [];
 
 function hydrateSpotGroups(spot, spotIndex) {
-  spot.groups.forEach((group, groupIndex) => {
-    group.id = `${spot.id}-${group.date.toLowerCase().replace(/\s+/g, "-")}-${groupIndex}`;
-    group.attendees = [];
-  });
-  if (spot.groups.some((group) => group.id === `${spot.id}-minor-test`)) return;
-  spot.groups.push({
-    day: "Test group",
-    date: "No adult",
-    time: "5:00 PM",
-    people: 3,
-    id: `${spot.id}-minor-test`,
-    attendees: [],
-  });
+  spot.groups = [];
 }
 
 spots.forEach(hydrateSpotGroups);
@@ -807,6 +795,8 @@ function getCurrentProfile() {
   if (!currentUser) return null;
   return normalizePerson({
     id: "me",
+    name: currentUser.name || currentUser.username || "Your profile",
+    username: currentUser.username || "",
     instagram: currentUser.instagram || "",
     placesVisited: Number(currentUser.placesVisited || 0),
     bio: currentUser.bio || "",
@@ -910,7 +900,7 @@ function syncAuthModeFields() {
 }
 
 function profileInitials(user) {
-  return user.name
+  return String(user?.name || user?.username || "U")
     .split(" ")
     .map((part) => part[0])
     .join("")
@@ -919,8 +909,15 @@ function profileInitials(user) {
 }
 
 function renderAuthActions() {
+  if (!authActions) return;
   if (currentUser) {
     const profile = getCurrentProfile();
+    if (!profile?.name) {
+      currentUser = null;
+      localStorage.removeItem("put1meetUser");
+      renderAuthActions();
+      return;
+    }
     const notificationCount = getMessengerNotificationCount();
     authActions.innerHTML = `
       <button class="messenger-button" type="button" data-open-inbox aria-label="Open messenger">
@@ -1029,6 +1026,7 @@ function renderSpots(filter = "all") {
             <h3>${spot.name}</h3>
             <p>${spot.blurb}</p>
             <div class="card-actions">
+              <button data-action="groups" data-id="${spot.id}">Find groups</button>
               <button data-action="tips" data-id="${spot.id}">Tips</button>
               <button data-action="reviews" data-id="${spot.id}">Reviews</button>
               <a class="location-button" href="${spot.mapUrl}" target="_blank" rel="noopener">Location</a>
@@ -1100,7 +1098,7 @@ function groupMarkup(spot) {
           `;
           },
         )
-        .join("") || '<p class="muted-small">No groups match your profile settings right now.</p>'}
+        .join("") || '<p class="muted-small">No groups yet. Make the first group for this spot.</p>'}
     </section>
   `;
 }
@@ -1988,8 +1986,9 @@ function rerenderActiveDrawer() {
 function openDrawer(spotId, action) {
   const spot = spots.find((item) => item.id === spotId);
   activeSpotId = spotId;
-  activeAction = action === "groups" ? "tips" : action;
+  activeAction = action;
   const sections = {
+    groups: groupMarkup(spot),
     tips: tipsMarkup(spot),
     reviews: reviewsMarkup(spot),
   };
@@ -2005,6 +2004,7 @@ function openDrawer(spotId, action) {
         <p>${spot.blurb}</p>
       </div>
       <div class="drawer-actions">
+        <button data-action="groups" data-id="${spot.id}">Find groups</button>
         <button data-action="tips" data-id="${spot.id}">Tips</button>
         <button data-action="reviews" data-id="${spot.id}">Reviews</button>
         <a class="location-button" href="${spot.mapUrl}" target="_blank" rel="noopener">Location</a>

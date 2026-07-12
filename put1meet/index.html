@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>put1meet | Bangalore spots</title>
     <link rel="preconnect" href="https://images.unsplash.com" />
-    <link rel="stylesheet" href="styles.css?v=48" />
+    <link rel="stylesheet" href="styles.css?v=50" />
   </head>
   <body>
     <header class="topbar">
@@ -26,7 +26,10 @@
           <input id="profileSearch" type="search" placeholder="Search profiles" aria-label="Search profiles" />
           <div class="search-results" id="searchResults" hidden></div>
         </div>
-        <div class="auth-actions" id="authActions"></div>
+        <div class="auth-actions" id="authActions">
+          <button class="auth-button" type="button" data-open-auth="signin">Sign in</button>
+          <button class="auth-button primary-lite" type="button" data-open-auth="signup">Sign up</button>
+        </div>
       </div>
     </header>
 
@@ -235,6 +238,6 @@
     </section>
 
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <script src="script.js?v=48"></script>
+    <script src="script.js?v=50"></script>
   </body>
 </html>
