@@ -1029,7 +1029,6 @@ function renderSpots(filter = "all") {
             <h3>${spot.name}</h3>
             <p>${spot.blurb}</p>
             <div class="card-actions">
-              <button data-action="groups" data-id="${spot.id}">Find groups</button>
               <button data-action="tips" data-id="${spot.id}">Tips</button>
               <button data-action="reviews" data-id="${spot.id}">Reviews</button>
               <a class="location-button" href="${spot.mapUrl}" target="_blank" rel="noopener">Location</a>
@@ -1989,9 +1988,8 @@ function rerenderActiveDrawer() {
 function openDrawer(spotId, action) {
   const spot = spots.find((item) => item.id === spotId);
   activeSpotId = spotId;
-  activeAction = action;
+  activeAction = action === "groups" ? "tips" : action;
   const sections = {
-    groups: groupMarkup(spot),
     tips: tipsMarkup(spot),
     reviews: reviewsMarkup(spot),
   };
@@ -2007,13 +2005,12 @@ function openDrawer(spotId, action) {
         <p>${spot.blurb}</p>
       </div>
       <div class="drawer-actions">
-        <button data-action="groups" data-id="${spot.id}">Find groups</button>
         <button data-action="tips" data-id="${spot.id}">Tips</button>
         <button data-action="reviews" data-id="${spot.id}">Reviews</button>
         <a class="location-button" href="${spot.mapUrl}" target="_blank" rel="noopener">Location</a>
       </div>
     </div>
-    ${sections[action]}
+    ${sections[activeAction]}
   `;
 
   drawerBackdrop.hidden = false;
