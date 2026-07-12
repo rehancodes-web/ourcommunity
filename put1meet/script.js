@@ -2261,11 +2261,14 @@ async function openChat(key, meta) {
   chatModal.setAttribute("aria-hidden", "false");
 }
 
-function openInbox(mode = "messages") {
+async function openInbox(mode = "messages") {
   if (!currentUser) {
     openAuth("signin");
     return;
   }
+  await loadPublicProfiles();
+  await loadFollowGraph();
+  await loadMyDmMessagesFromSupabase();
   const dms = getTrustedDmEntries();
   const groups = getJoinedGroupEntries();
   const invites = getInviteEntries();
@@ -2547,14 +2550,14 @@ document.addEventListener("click", async (event) => {
   const inboxTabButton = event.target.closest("[data-inbox-tab]");
   if (inboxTabButton) {
     if (!requireLogin("Sign in or sign up first to open messenger.")) return;
-    openInbox(inboxTabButton.dataset.inboxTab);
+    await openInbox(inboxTabButton.dataset.inboxTab);
     return;
   }
 
   const inboxButton = event.target.closest("[data-open-inbox]");
   if (inboxButton) {
     if (!requireLogin("Sign in or sign up first to open messenger.")) return;
-    openInbox();
+    await openInbox();
     return;
   }
 
@@ -2641,7 +2644,7 @@ document.addEventListener("click", async (event) => {
     joinedGroups.add(acceptInviteButton.dataset.acceptInvite);
     saveJoinedGroups();
     renderAuthActions();
-    openInbox(acceptInviteButton.textContent.trim() === "Accept" ? "requests" : "invites");
+    await openInbox(acceptInviteButton.textContent.trim() === "Accept" ? "requests" : "invites");
     return;
   }
 
