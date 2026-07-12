@@ -700,6 +700,12 @@ async function syncSupabaseSession() {
   renderAuthActions();
 }
 
+async function hasSupabaseSession() {
+  if (!supabaseClient) return false;
+  const { data } = await supabaseClient.auth.getSession();
+  return Boolean(data?.session?.user);
+}
+
 function usernameIsTaken(username, currentUsername = "") {
   const normalized = normalizeUsername(username);
   const current = normalizeUsername(currentUsername);
@@ -2373,10 +2379,12 @@ authForm.addEventListener("submit", async (event) => {
     randomRequests: formData.get("randomRequests"),
   };
   let supabaseUser = null;
-  if (supabaseClient && !currentUser) {
+  const signedIntoSupabase = await hasSupabaseSession();
+  const shouldCreateSupabaseAccount = supabaseClient && (!currentUser || !signedIntoSupabase || !currentUser.supabaseUserId);
+  if (shouldCreateSupabaseAccount) {
     const { data, error } = await supabaseClient.auth.signUp({
       email,
-      password,
+      password: password || existingPassword,
       options: { data: profilePayload },
     });
     if (error) {
