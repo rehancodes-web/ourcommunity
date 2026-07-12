@@ -512,6 +512,28 @@ if (Array.isArray(savedSuggestedSpots)) {
   spots.push(...savedSuggestedSpots);
 }
 
+const featuredSpotOrder = [
+  "vivekananda-gudda",
+  "acchala-bettu",
+  "broken-bridge-nice-road",
+  "bannerghatta-quarry-edge",
+  "turahalli-forest-road",
+  "hanumagiri-hills",
+  "airport-plane-spotting",
+  "kothanur-stalled-builds",
+];
+
+function sortFeaturedSpotsFirst() {
+  const order = new Map(featuredSpotOrder.map((id, index) => [id, index]));
+  spots.sort((a, b) => {
+    const aOrder = order.has(a.id) ? order.get(a.id) : Number.MAX_SAFE_INTEGER;
+    const bOrder = order.has(b.id) ? order.get(b.id) : Number.MAX_SAFE_INTEGER;
+    return aOrder - bOrder;
+  });
+}
+
+sortFeaturedSpotsFirst();
+
 const publicProfiles = [];
 const followRows = [];
 let followGraphLoaded = false;
@@ -924,6 +946,7 @@ async function loadSuggestedSpotsFromSupabase() {
     spots.push(row.data);
     hydrateSpotGroups(row.data, spots.length - 1);
   });
+  sortFeaturedSpotsFirst();
 }
 
 async function saveGroupToSupabase(spotId, group) {
