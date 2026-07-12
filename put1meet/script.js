@@ -849,6 +849,20 @@ function chatRecipientId(chatKey) {
   return isSupabaseId(recipientId) ? recipientId : null;
 }
 
+function canonicalChatKey(chatKey, row = {}) {
+  if (!chatKey?.startsWith("dm-")) return chatKey;
+  const rowPair = [row.sender_id, row.recipient_id].filter(isSupabaseId);
+  if (rowPair.length >= 2) {
+    return `dm-${rowPair.sort().join("--")}`;
+  }
+  const ids = chatKey.replace("dm-", "").split("--").filter(isSupabaseId);
+  const recipientId = ids.find((id) => id !== currentUser?.supabaseUserId) || row.recipient_id;
+  if (currentUser?.supabaseUserId && isSupabaseId(recipientId)) {
+    return `dm-${[currentUser.supabaseUserId, recipientId].sort().join("--")}`;
+  }
+  return chatKey;
+}
+
 function directChatKey(personId) {
   if (isSupabaseId(personId) && currentUser?.supabaseUserId) {
     return `dm-${[currentUser.supabaseUserId, personId].sort().join("--")}`;
@@ -873,31 +887,43 @@ function messageRowToLocal(row) {
 }
 
 async function loadChatMessagesFromSupabase(chatKey) {
-  if (!supabaseClient || !currentUser?.supabaseUserId) return chatStore[chatKey] || [];
+  const canonicalKey = canonicalChatKey(chatKey);
+  if (!supabaseClient || !currentUser?.supabaseUserId) return chatStore[canonicalKey] || chatStore[chatKey] || [];
+  const recipientId = chatRecipientId(canonicalKey);
+  const keys = [...new Set([chatKey, canonicalKey, recipientId ? `dm-${recipientId}` : "", `dm-${currentUser.supabaseUserId}`].filter(Boolean))];
+  await loadMyDmMessagesFromSupabase();
   const { data, error } = await supabaseClient
     .from("messages")
-    .select("id, chat_key, sender_id, sender_name, body, created_at")
-    .eq("chat_key", chatKey)
+    .select("id, chat_key, sender_id, recipient_id, sender_name, body, created_at")
+    .in("chat_key", keys)
     .order("created_at", { ascending: true })
     .limit(200);
-  if (error || !Array.isArray(data)) return chatStore[chatKey] || [];
-  chatStore[chatKey] = data.map(messageRowToLocal);
+  if (error || !Array.isArray(data)) return chatStore[canonicalKey] || chatStore[chatKey] || [];
+  const existing = chatStore[canonicalKey] || [];
+  chatStore[canonicalKey] = [...existing];
+  data.forEach((row) => {
+    if (!chatStore[canonicalKey].some((message) => message.createdAt && message.createdAt === row.created_at)) {
+      chatStore[canonicalKey].push(messageRowToLocal(row));
+    }
+  });
+  chatStore[canonicalKey].sort((a, b) => String(a.createdAt || "").localeCompare(String(b.createdAt || "")));
+  if (chatKey !== canonicalKey) delete chatStore[chatKey];
   saveObject("put1meetChats", chatStore);
-  return chatStore[chatKey];
+  return chatStore[canonicalKey];
 }
 
 async function loadMyDmMessagesFromSupabase() {
   if (!supabaseClient || !currentUser?.supabaseUserId) return;
   const { data, error } = await supabaseClient
     .from("messages")
-    .select("id, chat_key, sender_id, sender_name, body, created_at")
+    .select("id, chat_key, sender_id, recipient_id, sender_name, body, created_at")
     .or(`sender_id.eq.${currentUser.supabaseUserId},recipient_id.eq.${currentUser.supabaseUserId}`)
     .like("chat_key", "dm-%")
     .order("created_at", { ascending: true })
     .limit(500);
   if (error || !Array.isArray(data)) return;
   data.forEach((row) => {
-    const key = row.chat_key;
+    const key = canonicalChatKey(row.chat_key, row);
     if (!key) return;
     chatStore[key] = chatStore[key] || [];
     if (!chatStore[key].some((message) => message.createdAt && message.createdAt === row.created_at)) {
@@ -913,8 +939,12 @@ async function loadMyDmMessagesFromSupabase() {
 async function saveChatMessageToSupabase(chatKey, text) {
   if (!supabaseClient || !currentUser?.supabaseUserId) return false;
   const recipientId = chatRecipientId(chatKey);
+  const canonicalKey = canonicalChatKey(chatKey, {
+    sender_id: currentUser.supabaseUserId,
+    recipient_id: recipientId,
+  });
   const { error } = await supabaseClient.from("messages").insert({
-    chat_key: chatKey,
+    chat_key: canonicalKey,
     sender_id: currentUser.supabaseUserId,
     recipient_id: recipientId,
     sender_name: currentUser.name || currentUser.username || "Explorer",
@@ -1060,36 +1090,46 @@ async function loadUploadsFromSupabase() {
 async function migrateLocalDataToSupabase() {
   if (!supabaseClient || !currentUser?.supabaseUserId || !(await hasSupabaseSession())) return;
   const migrationKey = `put1meetSupabaseMigrated-${currentUser.supabaseUserId}`;
-  if (localStorage.getItem(migrationKey) === "yes") return;
+  const dmMigrationKey = `put1meetSupabaseDmsMigratedV2-${currentUser.supabaseUserId}`;
+  const alreadyMigrated = localStorage.getItem(migrationKey) === "yes";
+  const dmsAlreadyMigrated = localStorage.getItem(dmMigrationKey) === "yes";
+  if (alreadyMigrated && dmsAlreadyMigrated) return;
 
-  await Promise.all(savedSuggestedSpots.map((spot) => saveSuggestedSpotToSupabase(spot)));
-  await Promise.all(
-    spots.flatMap((spot) =>
-      spot.groups
-        .filter((group) => group.id?.includes("-custom-"))
-        .map((group) => saveGroupToSupabase(spot.id, group)),
-    ),
-  );
-  await Promise.all([...joinedGroups].map((groupId) => saveGroupMembershipToSupabase(groupId, true)));
-  await Promise.all(
-    Object.entries(reviewStore).flatMap(([groupId, reviews]) =>
-      (reviews || []).map((review) => saveReviewToSupabase(groupId, review)),
-    ),
-  );
-  await Promise.all(
-    Object.entries(uploadStore).flatMap(([groupId, photos]) =>
-      (photos || []).map((photo) => saveUploadToSupabase(groupId, photo)),
-    ),
-  );
-  await Promise.all(
-    Object.entries(chatStore).flatMap(([chatKey, messages]) =>
-      (messages || [])
-        .filter((message) => !message.synced)
-        .map((message) => saveChatMessageToSupabase(chatKey, message.text)),
-    ),
-  );
-  await saveSiteRolesToSupabase();
-  localStorage.setItem(migrationKey, "yes");
+  if (!alreadyMigrated) {
+    await Promise.all(savedSuggestedSpots.map((spot) => saveSuggestedSpotToSupabase(spot)));
+    await Promise.all(
+      spots.flatMap((spot) =>
+        spot.groups
+          .filter((group) => group.id?.includes("-custom-"))
+          .map((group) => saveGroupToSupabase(spot.id, group)),
+      ),
+    );
+    await Promise.all([...joinedGroups].map((groupId) => saveGroupMembershipToSupabase(groupId, true)));
+    await Promise.all(
+      Object.entries(reviewStore).flatMap(([groupId, reviews]) =>
+        (reviews || []).map((review) => saveReviewToSupabase(groupId, review)),
+      ),
+    );
+    await Promise.all(
+      Object.entries(uploadStore).flatMap(([groupId, photos]) =>
+        (photos || []).map((photo) => saveUploadToSupabase(groupId, photo)),
+      ),
+    );
+    await saveSiteRolesToSupabase();
+    localStorage.setItem(migrationKey, "yes");
+  }
+
+  if (!dmsAlreadyMigrated) {
+    for (const [chatKey, messages] of Object.entries(chatStore)) {
+      for (const message of messages || []) {
+        if (message.synced || message.supabaseMigratedV2 || !message.text) continue;
+        const saved = await saveChatMessageToSupabase(chatKey, message.text);
+        if (saved) message.supabaseMigratedV2 = true;
+      }
+    }
+    saveObject("put1meetChats", chatStore);
+    localStorage.setItem(dmMigrationKey, "yes");
+  }
 }
 
 async function loadCommunityDataFromSupabase() {
@@ -2176,12 +2216,13 @@ async function openChat(key, meta) {
     setAuthError("Sign in or sign up first to open messages.");
     return;
   }
-  activeChatKey = key;
+  const canonicalKey = canonicalChatKey(key);
+  activeChatKey = canonicalKey;
   activeChatMeta = meta;
-  cleanDirectMessageSeed(key, meta);
-  seedMessages(key, meta);
-  const messages = await loadChatMessagesFromSupabase(key);
-  const directProfileId = directProfileIdFromChatKey(key);
+  cleanDirectMessageSeed(canonicalKey, meta);
+  seedMessages(canonicalKey, meta);
+  const messages = await loadChatMessagesFromSupabase(canonicalKey);
+  const directProfileId = directProfileIdFromChatKey(canonicalKey);
   chatContent.innerHTML = `
     <div class="chat-panel">
       <p class="section-kicker">${meta.kind}</p>
@@ -2199,7 +2240,7 @@ async function openChat(key, meta) {
             ? messages
                 .map(
                   (message) => `
-                    <div class="message ${message.sender === currentUser.name ? "mine" : ""}">
+                    <div class="message ${message.senderId === currentUser.supabaseUserId || message.sender === currentUser.name ? "mine" : ""}">
                       <strong>${message.sender}</strong>
                       <span>${message.text}</span>
                     </div>
