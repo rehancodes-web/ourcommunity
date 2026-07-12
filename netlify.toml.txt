@@ -1,0 +1,12 @@
+[build]
+  publish = "."
+
+[[redirects]]
+  from = "/put1meet"
+  to = "/put1meet/"
+  status = 301
+
+[[redirects]]
+  from = "/"
+  to = "/put1meet/"
+  status = 302

@@ -1,0 +1,239 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>put1meet | Bangalore spots</title>
+    <link rel="preconnect" href="https://images.unsplash.com" />
+    <link rel="stylesheet" href="styles.css?v=44" />
+  </head>
+  <body>
+    <header class="topbar">
+      <a class="brand" href="#">
+        <span class="brand-mark">p1m</span>
+        <span class="brand-text">
+          <strong>put1meet</strong>
+          <small>by Rehan</small>
+        </span>
+      </a>
+      <div class="nav-shell">
+        <nav aria-label="Primary navigation">
+          <a href="#spots">Spots</a>
+          <a href="#map">Map</a>
+          <a href="#rules">Rules</a>
+        </nav>
+        <div class="profile-search">
+          <input id="profileSearch" type="search" placeholder="Search profiles" aria-label="Search profiles" />
+          <div class="search-results" id="searchResults" hidden></div>
+        </div>
+        <div class="auth-actions" id="authActions"></div>
+      </div>
+    </header>
+
+    <main>
+      <section class="hero" aria-label="Intro">
+        <div class="hero-copy">
+          <p class="eyebrow">Bangalore after the obvious places</p>
+          <h1>Find public ruins, hidden walks, and people going there.</h1>
+          <p>
+            A community board for legal, safety-first exploration around Bengaluru:
+            old forts, heritage corners, rock parks, sunrise points, and city trails
+            with a little abandoned-site energy.
+          </p>
+          <div class="hero-actions">
+            <a class="button primary" href="#spots">Explore spots</a>
+            <a class="button ghost" href="#submit">Suggest a spot</a>
+          </div>
+        </div>
+        <aside class="live-card" aria-label="Tonight's meetups">
+          <span class="status-dot"></span>
+          <p>Tonight</p>
+          <strong>37 people</strong>
+          <span>across 5 public meetups</span>
+        </aside>
+      </section>
+
+      <section class="controls" id="spots">
+        <div>
+          <p class="section-kicker">Community picks</p>
+          <h2>Spots around Bangalore</h2>
+        </div>
+        <div class="filter-row" role="group" aria-label="Filter spots">
+          <button class="filter active" data-filter="all">All</button>
+          <button class="filter" data-filter="heritage">Heritage</button>
+          <button class="filter" data-filter="nature">Nature</button>
+          <button class="filter" data-filter="hills">Hills</button>
+          <button class="filter" data-filter="abandoned">Abandoned</button>
+          <button class="filter" data-filter="night">Night vibe</button>
+        </div>
+      </section>
+
+      <section class="spot-grid" id="spotGrid" aria-live="polite"></section>
+
+      <section class="map-band" id="map">
+        <div>
+          <p class="section-kicker">Area view</p>
+          <h2>Plan by side of town</h2>
+          <p>
+            Exact pins are shown only for public places. For sensitive or restricted
+            sites, put1meet keeps entries as area-level notes and asks people to use
+            official access, guided walks, or public viewpoints.
+          </p>
+        </div>
+        <div class="mini-map" aria-label="Stylized Bangalore area map">
+          <span class="pin north">Nandi</span>
+          <span class="pin west">Devanahalli</span>
+          <span class="pin center">Pete</span>
+          <span class="pin south">Basavanagudi</span>
+          <span class="pin edge">Kanakapura Rd</span>
+          <span class="pin hulimavu">Hulimavu</span>
+          <span class="pin quarry">Quarry views</span>
+        </div>
+      </section>
+
+      <section class="rules" id="rules">
+        <div>
+          <p class="section-kicker">House rules</p>
+          <h2>Explore without making it worse</h2>
+        </div>
+        <ul>
+          <li>Only join public, legal visits or guided walks.</li>
+          <li>No vandalism, forced entry, climbing locked structures, or littering.</li>
+          <li>Share area-level tips for sensitive places; keep private property private.</li>
+          <li>Go in groups, carry water, and leave before weather or visibility gets bad.</li>
+        </ul>
+      </section>
+
+      <section class="submit" id="submit">
+        <div>
+          <p class="section-kicker">Add to put1meet</p>
+          <h2>Know a legit spot?</h2>
+          <p>Drop a public location, best time, and what people should respect there.</p>
+        </div>
+        <form id="spotSuggestionForm" data-spot-suggestion-form>
+          <input name="spotName" aria-label="Spot name" placeholder="Spot name" required />
+          <input name="area" aria-label="Area" placeholder="Area / side of town" required />
+          <input name="mapUrl" type="url" aria-label="Google Maps link" placeholder="Google Maps link" />
+          <label class="file-field">
+            <span>Photo optional</span>
+            <input name="photo" type="file" accept="image/*" aria-label="Spot photo" />
+          </label>
+          <button class="button primary" type="submit">Send suggestion</button>
+          <p class="submit-message" id="spotSuggestionMessage" hidden></p>
+        </form>
+      </section>
+    </main>
+
+    <div class="drawer-backdrop" id="drawerBackdrop" hidden></div>
+    <aside class="drawer" id="drawer" aria-hidden="true" aria-label="Spot details">
+      <button class="icon-button close" id="closeDrawer" aria-label="Close details">x</button>
+      <div id="drawerContent"></div>
+    </aside>
+
+    <div class="auth-modal-backdrop" id="authBackdrop" hidden></div>
+    <section class="auth-modal" id="authModal" aria-hidden="true" aria-label="Sign in or sign up">
+      <button class="icon-button close" id="closeAuth" aria-label="Close sign in">x</button>
+      <div class="auth-tabs" role="group" aria-label="Account mode">
+        <button class="auth-tab active" data-auth-tab="signup">Sign up</button>
+        <button class="auth-tab" data-auth-tab="signin">Sign in</button>
+      </div>
+      <form class="auth-form" id="authForm">
+        <h2 id="authTitle">Create your profile</h2>
+        <p id="authNote">Your name, age, and gender are shown only after you join a group.</p>
+        <p class="auth-error" id="authError" hidden></p>
+        <label>
+          Username
+          <input name="username" autocomplete="username" placeholder="rehan07" required />
+        </label>
+        <label>
+          Name
+          <input name="name" autocomplete="name" placeholder="Your name" required />
+        </label>
+        <label>
+          Age
+          <input name="age" inputmode="numeric" min="13" max="80" placeholder="18" required />
+        </label>
+        <label>
+          Gender
+          <select name="gender" required>
+            <option value="">Choose one</option>
+            <option>Female</option>
+            <option>Male</option>
+            <option>Non-binary</option>
+            <option>Prefer not to say</option>
+          </select>
+        </label>
+        <label>
+          Email
+          <input name="email" type="email" autocomplete="email" placeholder="you@example.com" required />
+        </label>
+        <label>
+          Password
+          <input name="password" type="password" autocomplete="new-password" placeholder="Make a password" required />
+        </label>
+        <div class="verify-box" id="emailVerifyBox" hidden>
+          <div>
+            <strong>Email verification</strong>
+            <span id="emailVerifyStatus">Verify this later from Complete profile.</span>
+          </div>
+          <button class="mini-button gold" type="button" data-send-email-verify>Verify email</button>
+        </div>
+        <label class="phone-field">
+          Phone number
+          <input name="phone" type="tel" autocomplete="tel" inputmode="tel" placeholder="+91 98765 43210" required />
+        </label>
+        <div class="otp-box" id="otpBox">
+          <div>
+            <strong>Phone OTP</strong>
+            <span id="otpStatus">Send an OTP before creating your account.</span>
+          </div>
+          <div class="verified-phone" id="verifiedPhone" hidden></div>
+          <div class="otp-actions">
+            <button class="mini-button gold" type="button" data-send-otp>Send OTP</button>
+            <input name="otp" inputmode="numeric" maxlength="6" placeholder="Enter OTP" aria-label="Enter phone OTP" />
+            <button class="mini-button secondary" type="button" data-verify-otp>Verify</button>
+          </div>
+        </div>
+        <label>
+          Instagram
+          <input name="instagram" placeholder="@yourhandle" />
+        </label>
+        <label>
+          About you
+          <input name="bio" placeholder="Photographer, history nerd, sunrise person..." />
+        </label>
+        <label>
+          Places visited
+          <input name="placesVisited" inputmode="numeric" min="0" placeholder="0" />
+        </label>
+        <label>
+          Preferred spots
+          <select name="preferredVibe">
+            <option value="heritage">Heritage and old-city walks</option>
+            <option value="nature">Nature and sunrise spots</option>
+            <option value="hills">Hills and viewpoints</option>
+            <option value="abandoned">Abandoned-style public spots</option>
+            <option value="night">Night vibe spots</option>
+            <option value="all">Anything public and interesting</option>
+          </select>
+        </label>
+        <label>
+          Random requests
+          <select name="randomRequests">
+            <option value="yes">Show requests that match my preferences</option>
+            <option value="no">Only people I follow or who follow me</option>
+          </select>
+        </label>
+        <button class="button primary" type="submit">Continue</button>
+      </form>
+    </section>
+
+    <div class="chat-modal-backdrop" id="chatBackdrop" hidden></div>
+    <section class="chat-modal" id="chatModal" aria-hidden="true" aria-label="Messenger">
+      <button class="icon-button close" id="closeChat" aria-label="Close messenger">x</button>
+      <div id="chatContent"></div>
+    </section>
+
+    <script src="script.js?v=44"></script>
+  </body>
+</html>
