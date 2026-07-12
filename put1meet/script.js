@@ -1,6 +1,7 @@
 const SUPABASE_URL = "https://vruyrpukjaiapmvgbzgv.supabase.co";
 const SUPABASE_PUBLISHABLE_KEY = "sb_publishable_0p7NHvbRX63BBLMlnL_OOQ_kXR6aDi7";
 const supabaseClient = window.supabase?.createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY) || null;
+const SITE_OWNER_EMAIL = "rehanzn2007@gmail.com";
 
 const spots = [
   {
@@ -778,7 +779,7 @@ async function saveProfileToSupabase(profile) {
     places_visited: profile.placesVisited,
     preferred_vibe: profile.preferredVibe,
     random_requests: profile.randomRequests,
-    site_role: profile.siteRole || "member",
+    site_role: String(profile.email || "").toLowerCase() === SITE_OWNER_EMAIL ? "owner" : profile.siteRole || "member",
     updated_at: new Date().toISOString(),
   });
 }
@@ -1147,9 +1148,10 @@ const defaultSiteRoles = {};
 
 function getSiteRole(person) {
   if (!person) return "member";
-  const username = normalizeUsername(person.username || person.name || "");
+  const email = String(person.email || "").toLowerCase();
+  if (email === SITE_OWNER_EMAIL) return "owner";
   if (person.id === "me") {
-    return currentUser?.siteRole || siteRoleStore.me || (username.includes("rehan") ? "owner" : "member");
+    return currentUser?.siteRole || siteRoleStore.me || "member";
   }
   return siteRoleStore[person.id] || person.siteRole || defaultSiteRoles[person.id] || "member";
 }
