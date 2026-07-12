@@ -725,6 +725,7 @@ async function syncSupabaseSession() {
   await loadPublicProfiles();
   mergeSavedProfileIntoCurrentUser();
   await loadFollowGraph();
+  await loadMyDmMessagesFromSupabase();
   localStorage.setItem("put1meetUser", JSON.stringify(currentUser));
   localStorage.setItem("put1meetLastUser", JSON.stringify(currentUser));
   renderAuthActions();
@@ -817,6 +818,263 @@ async function saveSiteRolesToSupabase() {
         .eq("id", personId),
     ),
   );
+}
+
+function chatRecipientId(chatKey) {
+  if (!chatKey.startsWith("dm-")) return null;
+  const ids = chatKey.replace("dm-", "").split("--");
+  const recipientId = ids.find((id) => id !== currentUser?.supabaseUserId) || ids[0];
+  return isSupabaseId(recipientId) ? recipientId : null;
+}
+
+function directChatKey(personId) {
+  if (isSupabaseId(personId) && currentUser?.supabaseUserId) {
+    return `dm-${[currentUser.supabaseUserId, personId].sort().join("--")}`;
+  }
+  return `dm-${personId}`;
+}
+
+function directProfileIdFromChatKey(chatKey) {
+  if (!chatKey.startsWith("dm-")) return "";
+  const ids = chatKey.replace("dm-", "").split("--");
+  return ids.find((id) => id !== currentUser?.supabaseUserId) || ids[0] || "";
+}
+
+function messageRowToLocal(row) {
+  return {
+    sender: row.sender_name || "Explorer",
+    senderId: row.sender_id || "",
+    text: row.body || "",
+    createdAt: row.created_at || "",
+    synced: true,
+  };
+}
+
+async function loadChatMessagesFromSupabase(chatKey) {
+  if (!supabaseClient || !currentUser?.supabaseUserId) return chatStore[chatKey] || [];
+  const { data, error } = await supabaseClient
+    .from("messages")
+    .select("id, chat_key, sender_id, sender_name, body, created_at")
+    .eq("chat_key", chatKey)
+    .order("created_at", { ascending: true })
+    .limit(200);
+  if (error || !Array.isArray(data)) return chatStore[chatKey] || [];
+  chatStore[chatKey] = data.map(messageRowToLocal);
+  saveObject("put1meetChats", chatStore);
+  return chatStore[chatKey];
+}
+
+async function loadMyDmMessagesFromSupabase() {
+  if (!supabaseClient || !currentUser?.supabaseUserId) return;
+  const { data, error } = await supabaseClient
+    .from("messages")
+    .select("id, chat_key, sender_id, sender_name, body, created_at")
+    .or(`sender_id.eq.${currentUser.supabaseUserId},recipient_id.eq.${currentUser.supabaseUserId}`)
+    .like("chat_key", "dm-%")
+    .order("created_at", { ascending: true })
+    .limit(500);
+  if (error || !Array.isArray(data)) return;
+  data.forEach((row) => {
+    const key = row.chat_key;
+    if (!key) return;
+    chatStore[key] = chatStore[key] || [];
+    if (!chatStore[key].some((message) => message.createdAt && message.createdAt === row.created_at)) {
+      chatStore[key].push(messageRowToLocal(row));
+    }
+  });
+  Object.keys(chatStore).forEach((key) => {
+    chatStore[key].sort((a, b) => String(a.createdAt || "").localeCompare(String(b.createdAt || "")));
+  });
+  saveObject("put1meetChats", chatStore);
+}
+
+async function saveChatMessageToSupabase(chatKey, text) {
+  if (!supabaseClient || !currentUser?.supabaseUserId) return false;
+  const recipientId = chatRecipientId(chatKey);
+  const { error } = await supabaseClient.from("messages").insert({
+    chat_key: chatKey,
+    sender_id: currentUser.supabaseUserId,
+    recipient_id: recipientId,
+    sender_name: currentUser.name || currentUser.username || "Explorer",
+    body: text,
+  });
+  return !error;
+}
+
+async function saveSuggestedSpotToSupabase(spot) {
+  if (!supabaseClient || !currentUser?.supabaseUserId || !spot?.id) return;
+  await supabaseClient.from("community_spots").upsert({
+    id: spot.id,
+    created_by: currentUser.supabaseUserId,
+    data: spot,
+    updated_at: new Date().toISOString(),
+  });
+}
+
+async function loadSuggestedSpotsFromSupabase() {
+  if (!supabaseClient) return;
+  const { data, error } = await supabaseClient
+    .from("community_spots")
+    .select("id, data")
+    .order("created_at", { ascending: false })
+    .limit(200);
+  if (error || !Array.isArray(data)) return;
+  data.forEach((row) => {
+    if (!row.data?.id || spots.some((spot) => spot.id === row.data.id)) return;
+    spots.push(row.data);
+    hydrateSpotGroups(row.data, spots.length - 1);
+  });
+}
+
+async function saveGroupToSupabase(spotId, group) {
+  if (!supabaseClient || !currentUser?.supabaseUserId || !spotId || !group?.id) return;
+  await supabaseClient.from("meet_groups").upsert({
+    id: group.id,
+    spot_id: spotId,
+    created_by: currentUser.supabaseUserId,
+    data: group,
+    updated_at: new Date().toISOString(),
+  });
+}
+
+async function loadGroupsFromSupabase() {
+  if (!supabaseClient) return;
+  const { data, error } = await supabaseClient
+    .from("meet_groups")
+    .select("id, spot_id, data")
+    .order("created_at", { ascending: true })
+    .limit(500);
+  if (error || !Array.isArray(data)) return;
+  data.forEach((row) => {
+    const spot = spots.find((item) => item.id === row.spot_id);
+    if (!spot || !row.data?.id || spot.groups.some((group) => group.id === row.data.id)) return;
+    spot.groups.push(row.data);
+  });
+}
+
+async function saveGroupMembershipToSupabase(groupId, shouldJoin) {
+  if (!supabaseClient || !currentUser?.supabaseUserId || !groupId) return;
+  const signedIn = await hasSupabaseSession();
+  if (!signedIn) return;
+  if (shouldJoin) {
+    await supabaseClient.from("group_members").upsert({
+      group_id: groupId,
+      user_id: currentUser.supabaseUserId,
+    });
+  } else {
+    await supabaseClient
+      .from("group_members")
+      .delete()
+      .eq("group_id", groupId)
+      .eq("user_id", currentUser.supabaseUserId);
+  }
+}
+
+async function loadJoinedGroupsFromSupabase() {
+  if (!supabaseClient || !currentUser?.supabaseUserId) return;
+  const { data, error } = await supabaseClient
+    .from("group_members")
+    .select("group_id")
+    .eq("user_id", currentUser.supabaseUserId)
+    .limit(500);
+  if (error || !Array.isArray(data)) return;
+  data.forEach((row) => row.group_id && joinedGroups.add(row.group_id));
+  saveJoinedGroups();
+}
+
+async function saveReviewToSupabase(groupId, review) {
+  if (!supabaseClient || !currentUser?.supabaseUserId || !groupId || !review) return;
+  await supabaseClient.from("meet_reviews").insert({
+    group_id: groupId,
+    user_id: currentUser.supabaseUserId,
+    data: review,
+  });
+}
+
+async function loadReviewsFromSupabase() {
+  if (!supabaseClient) return;
+  const { data, error } = await supabaseClient
+    .from("meet_reviews")
+    .select("group_id, data")
+    .order("created_at", { ascending: true })
+    .limit(1000);
+  if (error || !Array.isArray(data)) return;
+  data.forEach((row) => {
+    if (!row.group_id || !row.data) return;
+    reviewStore[row.group_id] = reviewStore[row.group_id] || [];
+    if (!reviewStore[row.group_id].some((review) => review.text === row.data.text && review.user === row.data.user)) {
+      reviewStore[row.group_id].push(row.data);
+    }
+  });
+  saveObject("put1meetMeetReviews", reviewStore);
+}
+
+async function saveUploadToSupabase(groupId, photo) {
+  if (!supabaseClient || !currentUser?.supabaseUserId || !groupId || !photo) return;
+  await supabaseClient.from("meet_uploads").insert({
+    group_id: groupId,
+    user_id: currentUser.supabaseUserId,
+    photo,
+  });
+}
+
+async function loadUploadsFromSupabase() {
+  if (!supabaseClient) return;
+  const { data, error } = await supabaseClient
+    .from("meet_uploads")
+    .select("group_id, photo")
+    .order("created_at", { ascending: true })
+    .limit(1000);
+  if (error || !Array.isArray(data)) return;
+  data.forEach((row) => {
+    if (!row.group_id || !row.photo) return;
+    uploadStore[row.group_id] = uploadStore[row.group_id] || [];
+    if (!uploadStore[row.group_id].includes(row.photo)) uploadStore[row.group_id].push(row.photo);
+  });
+  saveObject("put1meetUploads", uploadStore);
+}
+
+async function migrateLocalDataToSupabase() {
+  if (!supabaseClient || !currentUser?.supabaseUserId || !(await hasSupabaseSession())) return;
+  const migrationKey = `put1meetSupabaseMigrated-${currentUser.supabaseUserId}`;
+  if (localStorage.getItem(migrationKey) === "yes") return;
+
+  await Promise.all(savedSuggestedSpots.map((spot) => saveSuggestedSpotToSupabase(spot)));
+  await Promise.all(
+    spots.flatMap((spot) =>
+      spot.groups
+        .filter((group) => group.id?.includes("-custom-"))
+        .map((group) => saveGroupToSupabase(spot.id, group)),
+    ),
+  );
+  await Promise.all([...joinedGroups].map((groupId) => saveGroupMembershipToSupabase(groupId, true)));
+  await Promise.all(
+    Object.entries(reviewStore).flatMap(([groupId, reviews]) =>
+      (reviews || []).map((review) => saveReviewToSupabase(groupId, review)),
+    ),
+  );
+  await Promise.all(
+    Object.entries(uploadStore).flatMap(([groupId, photos]) =>
+      (photos || []).map((photo) => saveUploadToSupabase(groupId, photo)),
+    ),
+  );
+  await Promise.all(
+    Object.entries(chatStore).flatMap(([chatKey, messages]) =>
+      (messages || [])
+        .filter((message) => !message.synced)
+        .map((message) => saveChatMessageToSupabase(chatKey, message.text)),
+    ),
+  );
+  await saveSiteRolesToSupabase();
+  localStorage.setItem(migrationKey, "yes");
+}
+
+async function loadCommunityDataFromSupabase() {
+  await loadSuggestedSpotsFromSupabase();
+  await loadGroupsFromSupabase();
+  await loadJoinedGroupsFromSupabase();
+  await loadReviewsFromSupabase();
+  await loadUploadsFromSupabase();
 }
 
 function mergeSavedProfileIntoCurrentUser() {
@@ -1492,7 +1750,7 @@ function getDmEntries() {
   return Object.entries(chatStore)
     .filter(([key, messages]) => key.startsWith("dm-") && messages.length)
     .map(([key, messages]) => {
-      const person = findPerson(key.replace("dm-", ""));
+      const person = findPerson(directProfileIdFromChatKey(key));
       if (person) {
         cleanDirectMessageSeed(key, { kind: "Direct message", title: person.name });
         messages = chatStore[key] || [];
@@ -1888,7 +2146,7 @@ function cleanDirectMessageSeed(key, meta) {
   }
 }
 
-function openChat(key, meta) {
+async function openChat(key, meta) {
   if (!currentUser) {
     pendingJoin = null;
     openAuth("signin");
@@ -1898,8 +2156,9 @@ function openChat(key, meta) {
   activeChatKey = key;
   activeChatMeta = meta;
   cleanDirectMessageSeed(key, meta);
-  const messages = seedMessages(key, meta);
-  const directProfileId = key.startsWith("dm-") ? key.replace("dm-", "") : "";
+  seedMessages(key, meta);
+  const messages = await loadChatMessagesFromSupabase(key);
+  const directProfileId = directProfileIdFromChatKey(key);
   chatContent.innerHTML = `
     <div class="chat-panel">
       <p class="section-kicker">${meta.kind}</p>
@@ -2284,7 +2543,7 @@ document.addEventListener("click", async (event) => {
     if (!requireLogin("Sign in or sign up first to open messages.")) return;
     const person = findPerson(inboxDmButton.dataset.inboxDm);
     if (person) {
-      openChat(`dm-${person.id}`, {
+      openChat(directChatKey(person.id), {
         kind: "Direct message",
         title: person.name,
       });
@@ -2396,7 +2655,7 @@ document.addEventListener("click", async (event) => {
     if (!requireLogin("Sign in or sign up first to message people.")) return;
     const person = findPerson(directChatButton.dataset.directChat);
     if (person) {
-      openChat(`dm-${person.id}`, {
+      openChat(directChatKey(person.id), {
         kind: "Direct message",
         title: person.name,
       });
@@ -2427,13 +2686,14 @@ document.addEventListener("click", async (event) => {
     const file = input?.files?.[0];
     if (!file) return;
     const reader = new FileReader();
-    reader.addEventListener("load", () => {
+    reader.addEventListener("load", async () => {
       uploadStore[groupId] = [...(uploadStore[groupId] || []), reader.result];
       if (currentUser) {
         currentUser.photos = [...(currentUser.photos || []), reader.result];
         localStorage.setItem("put1meetUser", JSON.stringify(currentUser));
       }
       saveObject("put1meetUploads", uploadStore);
+      await saveUploadToSupabase(groupId, reader.result);
       rerenderActiveDrawer();
       const refreshedPanel = document.querySelector(`[data-after-panel="${groupId}"]`);
       if (refreshedPanel) refreshedPanel.hidden = false;
@@ -2484,6 +2744,7 @@ document.addEventListener("click", async (event) => {
 
     if (joinedGroups.has(groupId)) {
       joinedGroups.delete(groupId);
+      await saveGroupMembershipToSupabase(groupId, false);
     } else {
       const match = findGroup(groupId);
       if (match && !canCurrentUserJoinGroup(match.group)) {
@@ -2492,6 +2753,7 @@ document.addEventListener("click", async (event) => {
         return;
       }
       joinedGroups.add(groupId);
+      await saveGroupMembershipToSupabase(groupId, true);
     }
     saveJoinedGroups();
     openDrawer(spotId, "groups");
@@ -2580,6 +2842,7 @@ authForm.addEventListener("submit", async (event) => {
     await loadPublicProfiles();
     mergeSavedProfileIntoCurrentUser();
     await loadFollowGraph();
+    await loadMyDmMessagesFromSupabase();
     localStorage.setItem("put1meetUser", JSON.stringify(currentUser));
     localStorage.setItem("put1meetLastUser", JSON.stringify(currentUser));
     renderAuthActions();
@@ -2691,6 +2954,7 @@ authForm.addEventListener("submit", async (event) => {
     if (match && canCurrentUserJoinGroup(match.group)) {
       joinedGroups.add(pendingJoin.groupId);
       saveJoinedGroups();
+      await saveGroupMembershipToSupabase(pendingJoin.groupId, true);
     } else {
       setGroupSafetyNotice("Because your age is under 18, this meet needs at least one 18+ person before you can join.");
     }
@@ -2743,6 +3007,7 @@ document.addEventListener("submit", async (event) => {
       };
       savedSuggestedSpots.push(newSpot);
       saveSuggestedSpots();
+      await saveSuggestedSpotToSupabase(newSpot);
       spots.push(newSpot);
       hydrateSpotGroups(newSpot, spots.length - 1);
       const activeFilter = document.querySelector(".filter.active")?.dataset.filter || "all";
@@ -2850,6 +3115,8 @@ document.addEventListener("submit", async (event) => {
     spot.groups.unshift(newGroup);
     joinedGroups.add(newGroup.id);
     saveJoinedGroups();
+    await saveGroupToSupabase(spot.id, newGroup);
+    await saveGroupMembershipToSupabase(newGroup.id, true);
     openDrawer(spot.id, "groups");
     return;
   }
@@ -2860,12 +3127,15 @@ document.addEventListener("submit", async (event) => {
     const input = chatForm.elements.message;
     const text = input.value.trim();
     if (!text || !activeChatKey || !currentUser) return;
-    chatStore[activeChatKey] = [
-      ...(chatStore[activeChatKey] || []),
-      { sender: currentUser.name, text },
-    ];
+    const savedToSupabase = await saveChatMessageToSupabase(activeChatKey, text);
+    if (!savedToSupabase) {
+      chatStore[activeChatKey] = [
+        ...(chatStore[activeChatKey] || []),
+        { sender: currentUser.name || currentUser.username || "Explorer", text },
+      ];
+    }
     saveObject("put1meetChats", chatStore);
-    openChat(activeChatKey, activeChatMeta);
+    await openChat(activeChatKey, activeChatMeta);
     return;
   }
 
@@ -2875,15 +3145,17 @@ document.addEventListener("submit", async (event) => {
     if (!requireLogin("Sign in or sign up first to leave a review.")) return;
     const groupId = reviewForm.dataset.reviewForm;
     const formData = new FormData(reviewForm);
+    const review = {
+      user: currentUser.name,
+      rating: formData.get("rating"),
+      text: formData.get("text"),
+    };
     reviewStore[groupId] = [
       ...(reviewStore[groupId] || []),
-      {
-        user: currentUser.name,
-        rating: formData.get("rating"),
-        text: formData.get("text"),
-      },
+      review,
     ];
     saveObject("put1meetMeetReviews", reviewStore);
+    await saveReviewToSupabase(groupId, review);
     rerenderActiveDrawer();
     const refreshedPanel = document.querySelector(`[data-after-panel="${groupId}"]`);
     if (refreshedPanel) refreshedPanel.hidden = false;
@@ -2913,11 +3185,14 @@ function openSharedProfileFromHash() {
 
 async function initializeApp() {
   purgeDummyProfileData();
-  renderSpots();
   renderAuthActions();
   await loadPublicProfiles();
   await loadFollowGraph();
   await syncSupabaseSession();
+  await migrateLocalDataToSupabase();
+  await loadCommunityDataFromSupabase();
+  await loadMyDmMessagesFromSupabase();
+  renderSpots();
   openSharedProfileFromHash();
 }
 
