@@ -789,8 +789,18 @@ function usernameIsTaken(username, currentUsername = "") {
   const current = normalizeUsername(currentUsername);
   if (!normalized || normalized === current) return false;
   const accounts = getAccountStore();
-  const profileNames = publicProfiles.map((person) => normalizeUsername(person.username || person.name || ""));
-  return Boolean(accounts[normalized]) || profileNames.includes(normalized);
+  const accountTaken = Object.values(accounts).some((account) => {
+    const accountUser = account.user || {};
+    if (accountUser.email && currentUser?.email && accountUser.email === currentUser.email) return false;
+    if (accountUser.supabaseUserId && currentUser?.supabaseUserId && accountUser.supabaseUserId === currentUser.supabaseUserId) return false;
+    return normalizeUsername(accountUser.username || "") === normalized;
+  });
+  const profileTaken = publicProfiles.some((person) => {
+    if (person.id && currentUser?.supabaseUserId && person.id === currentUser.supabaseUserId) return false;
+    if (person.email && currentUser?.email && person.email === currentUser.email) return false;
+    return normalizeUsername(person.username || person.name || "") === normalized;
+  });
+  return accountTaken || profileTaken;
 }
 
 function setAuthError(message = "") {
