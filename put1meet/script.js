@@ -1,3 +1,7 @@
+const SUPABASE_URL = "https://vruyrpukjaiapmvgbzgv.supabase.co";
+const SUPABASE_PUBLISHABLE_KEY = "sb_publishable_0p7NHvbRX63BBLMlnL_OOQ_kXR6aDi7";
+const supabaseClient = window.supabase?.createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY) || null;
+
 const spots = [
   {
     id: "bangalore-fort",
@@ -664,6 +668,36 @@ function getAccountStore() {
 
 function saveAccountStore(accounts) {
   localStorage.setItem("put1meetAccounts", JSON.stringify(accounts));
+}
+
+function makeSupabaseProfile(user, username = "") {
+  const meta = user?.user_metadata || {};
+  return {
+    username: meta.username || username || "",
+    name: meta.name || meta.full_name || username || "Explorer",
+    age: Number(meta.age || 18),
+    gender: meta.gender || "Prefer not to say",
+    email: user?.email || meta.email || "",
+    emailVerified: Boolean(user?.email_confirmed_at),
+    phone: meta.phone || "",
+    phoneVerified: Boolean(meta.phoneVerified),
+    instagram: meta.instagram || "",
+    bio: meta.bio || "",
+    placesVisited: Number(meta.placesVisited || 0),
+    preferredVibe: meta.preferredVibe || "heritage",
+    randomRequests: meta.randomRequests || "yes",
+    supabaseUserId: user?.id || "",
+  };
+}
+
+async function syncSupabaseSession() {
+  if (!supabaseClient) return;
+  const { data } = await supabaseClient.auth.getSession();
+  if (!data?.session?.user) return;
+  currentUser = { ...(currentUser || {}), ...makeSupabaseProfile(data.session.user, currentUser?.username) };
+  localStorage.setItem("put1meetUser", JSON.stringify(currentUser));
+  localStorage.setItem("put1meetLastUser", JSON.stringify(currentUser));
+  renderAuthActions();
 }
 
 function usernameIsTaken(username, currentUsername = "") {
@@ -1942,7 +1976,7 @@ function hideDrawer() {
   drawerBackdrop.hidden = true;
 }
 
-document.addEventListener("click", (event) => {
+document.addEventListener("click", async (event) => {
   const searchedProfileButton = event.target.closest("[data-search-profile]");
   if (searchedProfileButton) {
     profileSearch.value = "";
@@ -2070,6 +2104,7 @@ document.addEventListener("click", (event) => {
   }
 
   if (event.target.closest("[data-signout]")) {
+    if (supabaseClient) await supabaseClient.auth.signOut();
     currentUser = null;
     joinedGroups.clear();
     localStorage.removeItem("put1meetUser");
@@ -2256,18 +2291,33 @@ authForm.addEventListener("click", (event) => {
   }
 });
 
-authForm.addEventListener("submit", (event) => {
+authForm.addEventListener("submit", async (event) => {
   event.preventDefault();
   const formData = new FormData(authForm);
   if (authMode === "signin") {
     const username = normalizeUsername(formData.get("username"));
+    const rawLogin = String(formData.get("username") || "").trim();
     const password = formData.get("password");
     const account = getAccountStore()[username];
-    if (!account || account.password !== password) {
-      setAuthError("Username or password is wrong.");
-      return;
+    if (supabaseClient) {
+      const email = account?.user?.email || (rawLogin.includes("@") ? rawLogin : "");
+      if (!email) {
+        setAuthError("Use your email once on this device, then username sign in will work too.");
+        return;
+      }
+      const { data, error } = await supabaseClient.auth.signInWithPassword({ email, password });
+      if (error) {
+        setAuthError(error.message || "Email or password is wrong.");
+        return;
+      }
+      currentUser = { ...(account?.user || {}), ...makeSupabaseProfile(data.user, username) };
+    } else {
+      if (!account || account.password !== password) {
+        setAuthError("Username or password is wrong.");
+        return;
+      }
+      currentUser = account.user;
     }
-    currentUser = account.user;
     localStorage.setItem("put1meetUser", JSON.stringify(currentUser));
     localStorage.setItem("put1meetLastUser", JSON.stringify(currentUser));
     renderAuthActions();
@@ -2308,14 +2358,12 @@ authForm.addEventListener("submit", (event) => {
   }
   const email = formData.get("email").trim();
   const emailVerified = currentUser?.email === email ? Boolean(currentUser?.emailVerified) : false;
-  currentUser = {
-    ...(currentUser || {}),
+  const profilePayload = {
     username,
     name: formData.get("name").trim(),
     age: Number(formData.get("age")),
     gender: formData.get("gender"),
     email,
-    emailVerified,
     phone: formData.get("phone").trim(),
     phoneVerified: authMode === "signup" ? true : Boolean(currentUser?.phoneVerified),
     instagram: formData.get("instagram").trim(),
@@ -2323,6 +2371,35 @@ authForm.addEventListener("submit", (event) => {
     placesVisited: Number(formData.get("placesVisited") || 0),
     preferredVibe: formData.get("preferredVibe"),
     randomRequests: formData.get("randomRequests"),
+  };
+  let supabaseUser = null;
+  if (supabaseClient && !currentUser) {
+    const { data, error } = await supabaseClient.auth.signUp({
+      email,
+      password,
+      options: { data: profilePayload },
+    });
+    if (error) {
+      setAuthError(error.message || "Could not create your Supabase account.");
+      return;
+    }
+    supabaseUser = data.user;
+  } else if (supabaseClient && currentUser) {
+    const updatePayload = { data: profilePayload };
+    if (email && email !== currentUser.email) updatePayload.email = email;
+    if (password) updatePayload.password = password;
+    const { data, error } = await supabaseClient.auth.updateUser(updatePayload);
+    if (error) {
+      setAuthError(error.message || "Could not update your Supabase profile.");
+      return;
+    }
+    supabaseUser = data.user;
+  }
+  currentUser = {
+    ...(currentUser || {}),
+    ...profilePayload,
+    emailVerified: supabaseUser ? Boolean(supabaseUser.email_confirmed_at) : emailVerified,
+    supabaseUserId: supabaseUser?.id || currentUser?.supabaseUserId || "",
   };
   accounts[username] = { password: password || existingPassword, user: currentUser };
   saveAccountStore(accounts);
@@ -2543,3 +2620,4 @@ document.addEventListener("keydown", (event) => {
 
 renderSpots();
 renderAuthActions();
+syncSupabaseSession();
