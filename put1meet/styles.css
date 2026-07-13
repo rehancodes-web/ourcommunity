@@ -75,6 +75,23 @@ select {
   font-weight: 800;
 }
 
+.brand-credit {
+  width: fit-content;
+  padding: 0;
+  color: var(--muted);
+  background: transparent;
+  border: 0;
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1.05;
+  cursor: pointer;
+  text-align: left;
+}
+
+.brand-credit:hover {
+  color: var(--ink);
+}
+
 .brand-mark {
   display: grid;
   place-items: center;
@@ -128,6 +145,7 @@ body.has-scrolled.is-signed-in .topbar {
 }
 
 body.has-scrolled.is-signed-in .brand small,
+body.has-scrolled.is-signed-in .brand-credit,
 body.has-scrolled.is-signed-in nav,
 body.has-scrolled.is-signed-in .profile-search,
 body.has-scrolled.is-signed-in .auth-actions .auth-button.compact,

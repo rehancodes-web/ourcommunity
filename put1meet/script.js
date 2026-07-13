@@ -1987,6 +1987,13 @@ function findPerson(personId) {
   return null;
 }
 
+function findProfileByEmail(email) {
+  const normalizedEmail = String(email || "").trim().toLowerCase();
+  if (!normalizedEmail) return null;
+  if (currentUser?.email?.toLowerCase() === normalizedEmail) return getCurrentProfile();
+  return publicProfiles.find((person) => String(person.email || "").toLowerCase() === normalizedEmail) || null;
+}
+
 function getAllProfiles() {
   const profiles = new Map();
   if (currentUser) profiles.set("me", getCurrentProfile());
@@ -3232,6 +3239,17 @@ function requireCompleteProfile(message = "Complete your profile before joining 
   return false;
 }
 
+async function openOwnerProfile() {
+  if (!requireLogin("Sign in or sign up first to view Rehan's profile.")) return;
+  await loadPublicProfiles();
+  const ownerProfile = findProfileByEmail(SITE_OWNER_EMAIL);
+  if (ownerProfile) {
+    openProfile(ownerProfile.id);
+    return;
+  }
+  showWelcome("Rehan's profile is not available yet. Try again after the profile syncs.");
+}
+
 function openSearchedProfileFromButton(button) {
   if (!button) return;
   if (!requireLogin("Sign in or sign up first to search and view profiles.")) return;
@@ -3242,6 +3260,13 @@ function openSearchedProfileFromButton(button) {
 }
 
 document.addEventListener("click", async (event) => {
+  const ownerProfileButton = event.target.closest("[data-open-owner-profile]");
+  if (ownerProfileButton) {
+    event.preventDefault();
+    await openOwnerProfile();
+    return;
+  }
+
   const searchedProfileButton = event.target.closest("[data-search-profile]");
   if (searchedProfileButton) {
     openSearchedProfileFromButton(searchedProfileButton);
