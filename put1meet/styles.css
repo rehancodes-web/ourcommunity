@@ -1388,6 +1388,7 @@ select {
   cursor: pointer;
   font-size: 13px;
   font-weight: 850;
+  touch-action: manipulation;
 }
 
 .link-button {

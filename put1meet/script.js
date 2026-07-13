@@ -962,23 +962,42 @@ async function loadFollowGraph() {
 }
 
 async function saveFollowToSupabase(personId, shouldFollow) {
-  if (!supabaseClient || !currentUser?.supabaseUserId || !personId || personId === "me") return;
-  if (!isSupabaseId(personId)) return;
+  if (!supabaseClient || !currentUser?.supabaseUserId || !personId || personId === "me") return true;
+  if (!isSupabaseId(personId)) return true;
   const signedIn = await hasSupabaseSession();
-  if (!signedIn) return;
+  if (!signedIn) return false;
   if (shouldFollow) {
-    await supabaseClient.from("follows").upsert({
-      follower_id: currentUser.supabaseUserId,
-      following_id: personId,
-    });
+    const alreadySynced = followRows.some((row) => row.follower_id === currentUser.supabaseUserId && row.following_id === personId);
+    const { error } = alreadySynced
+      ? { error: null }
+      : await supabaseClient.from("follows").insert({
+        follower_id: currentUser.supabaseUserId,
+        following_id: personId,
+      });
+    if (error && error.code !== "23505") {
+      console.warn("Could not save follow", error);
+      return false;
+    }
+    if (!alreadySynced) {
+      followRows.push({ follower_id: currentUser.supabaseUserId, following_id: personId });
+    }
   } else {
-    await supabaseClient
+    const { error } = await supabaseClient
       .from("follows")
       .delete()
       .eq("follower_id", currentUser.supabaseUserId)
       .eq("following_id", personId);
+    if (error) {
+      console.warn("Could not remove follow", error);
+      return false;
+    }
+    for (let index = followRows.length - 1; index >= 0; index -= 1) {
+      const row = followRows[index];
+      if (row.follower_id === currentUser.supabaseUserId && row.following_id === personId) followRows.splice(index, 1);
+    }
   }
-  await loadFollowGraph();
+  followGraphLoaded = true;
+  return true;
 }
 
 async function saveSiteRolesToSupabase() {
@@ -2823,7 +2842,8 @@ async function openProfile(personId) {
   const person = findPerson(personId);
   if (!person) return;
   const isMe = person.id === "me";
-  const isFollowing = followedPeople.has(person.id);
+  const followPersonId = getPersonSupabaseId(person) || person.id;
+  const isFollowing = followedPeople.has(followPersonId);
   const displayUsername = person.username ? `@${person.username.replace(/^@/, "")}` : person.instagram || "Username not added";
   const instagramHandle = person.instagram ? `@${person.instagram.replace(/^@/, "")}` : "Instagram not added";
   drawerContent.innerHTML = `
@@ -2873,7 +2893,7 @@ async function openProfile(personId) {
           isMe
             ? '<button class="mini-button secondary" data-complete-profile>Complete profile</button>'
             : `
-              <button class="mini-button ${isFollowing ? "" : "gold"}" type="button" data-follow-person="${person.id}">
+              <button class="mini-button ${isFollowing ? "" : "gold"}" type="button" data-follow-person="${followPersonId}" data-follow-profile="${person.id}">
                 ${isFollowing ? "Following" : "Follow"}
               </button>
               <button class="mini-button secondary" type="button" data-direct-chat="${person.id}">Message</button>
@@ -3533,6 +3553,7 @@ async function handleFollowButton(followButton) {
   if (!followButton) return;
   if (!requireLogin("Sign in or sign up first to follow people.")) return;
   const personId = followButton.dataset.followPerson;
+  const profileId = followButton.dataset.followProfile || personId;
   if (!personId) return;
   if (activeFollowRequests.has(personId)) return;
   activeFollowRequests.add(personId);
@@ -3546,8 +3567,16 @@ async function handleFollowButton(followButton) {
       shouldFollow = true;
     }
     saveFollowedPeople();
-    await saveFollowToSupabase(personId, shouldFollow);
-    await openProfile(personId);
+    const saved = await saveFollowToSupabase(personId, shouldFollow);
+    if (!saved && isSupabaseId(personId)) {
+      if (shouldFollow) followedPeople.delete(personId);
+      else followedPeople.add(personId);
+      saveFollowedPeople();
+      showWelcome("Follow could not save. Sign in again and try once more.");
+      openAuth("signin");
+      return;
+    }
+    await openProfile(profileId);
   } finally {
     activeFollowRequests.delete(personId);
     if (document.body.contains(followButton)) followButton.disabled = false;
@@ -3602,7 +3631,7 @@ document.addEventListener("click", async (event) => {
 
   const followButton = event.target.closest("[data-follow-person]");
   if (followButton) {
-    if (Date.now() - lastMobileFollowTap < 900 && followButton.dataset.followPerson === lastMobileFollowPersonId) {
+    if (Date.now() - lastMobileFollowTap < 2500 && followButton.dataset.followPerson === lastMobileFollowPersonId) {
       event.preventDefault();
       event.stopPropagation();
       return;
@@ -4030,6 +4059,10 @@ async function handleMobileFollowTap(event) {
 }
 
 drawerContent.addEventListener("pointerup", (event) => {
+  if (!window.matchMedia("(pointer: coarse)").matches) return;
+  handleMobileFollowTap(event);
+});
+drawerContent.addEventListener("pointerdown", (event) => {
   if (!window.matchMedia("(pointer: coarse)").matches) return;
   handleMobileFollowTap(event);
 });
