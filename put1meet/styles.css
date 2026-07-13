@@ -1575,6 +1575,10 @@ select {
   text-align: center;
 }
 
+.insta-stats > :nth-child(n + 4) {
+  display: none;
+}
+
 .insta-stats div,
 .insta-stats button {
   min-width: 0;
