@@ -183,10 +183,18 @@ drop policy if exists "Users can unfollow as themselves" on public.follows;
 create policy "Users can unfollow as themselves" on public.follows for delete using (auth.uid() = follower_id);
 
 drop policy if exists "Users can read their direct messages" on public.messages;
+delete from public.messages
+where chat_key like 'dm-%'
+  and recipient_id is null;
+
 create policy "Users can read their direct messages" on public.messages for select using (
   sender_id = auth.uid()
   or recipient_id = auth.uid()
-  or (recipient_id is null and auth.uid() is not null)
+  or (
+    recipient_id is null
+    and chat_key like 'custom-group-%'
+    and auth.uid() is not null
+  )
 );
 drop policy if exists "Users can send their own messages" on public.messages;
 create policy "Users can send their own messages" on public.messages for insert with check (
