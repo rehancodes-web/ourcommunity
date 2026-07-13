@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>put1meet | Bangalore spots</title>
     <link rel="preconnect" href="https://images.unsplash.com" />
-    <link rel="stylesheet" href="styles.css?v=99" />
+    <link rel="stylesheet" href="styles.css?v=100" />
   </head>
   <body>
     <header class="topbar">
@@ -136,6 +136,13 @@
           <button class="button primary" type="submit">Send suggestion</button>
           <p class="submit-message" id="spotSuggestionMessage" hidden></p>
         </form>
+        <section class="spot-suggestions-panel" id="spotSuggestionsPanel" hidden>
+          <div>
+            <p class="section-kicker">Admin review</p>
+            <h3>Spot suggestions</h3>
+          </div>
+          <div class="spot-suggestions-list" id="spotSuggestionsList"></div>
+        </section>
       </section>
     </main>
 
@@ -235,6 +242,6 @@
     </section>
 
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <script src="script.js?v=99"></script>
+    <script src="script.js?v=100"></script>
   </body>
 </html>

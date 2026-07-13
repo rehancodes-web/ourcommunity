@@ -599,8 +599,9 @@ const spots = [
 ];
 
 const savedSuggestedSpots = JSON.parse(localStorage.getItem("put1meetSuggestedSpots") || "[]");
+const savedSpotSuggestions = JSON.parse(localStorage.getItem("put1meetSpotSuggestions") || "[]");
 if (Array.isArray(savedSuggestedSpots)) {
-  spots.push(...savedSuggestedSpots);
+  spots.push(...savedSuggestedSpots.filter((spot) => shouldShowCommunitySpot(spot)));
 }
 
 const spotCoordinates = {
@@ -681,6 +682,8 @@ const emailVerifyBox = document.querySelector("#emailVerifyBox");
 const emailVerifyStatus = document.querySelector("#emailVerifyStatus");
 const profileSearch = document.querySelector("#profileSearch");
 const searchResults = document.querySelector("#searchResults");
+const spotSuggestionsPanel = document.querySelector("#spotSuggestionsPanel");
+const spotSuggestionsList = document.querySelector("#spotSuggestionsList");
 const useLocationButton = document.querySelector("#useLocationButton");
 const distanceFilter = document.querySelector("#distanceFilter");
 const locationStatus = document.querySelector("#locationStatus");
@@ -765,6 +768,22 @@ function purgeDummyProfileData() {
   if (changedChats) saveObject("put1meetChats", chatStore);
 }
 
+function purgeTestSpotData() {
+  const cleanedApproved = savedSuggestedSpots.filter((spot) => !isTestSpot(spot));
+  if (cleanedApproved.length !== savedSuggestedSpots.length) {
+    savedSuggestedSpots.splice(0, savedSuggestedSpots.length, ...cleanedApproved);
+    saveSuggestedSpots();
+  }
+  const cleanedPending = savedSpotSuggestions.filter((spot) => !isTestSpot(spot));
+  if (cleanedPending.length !== savedSpotSuggestions.length) {
+    savedSpotSuggestions.splice(0, savedSpotSuggestions.length, ...cleanedPending);
+    saveSpotSuggestions();
+  }
+  for (let index = spots.length - 1; index >= 0; index -= 1) {
+    if (isTestSpot(spots[index])) spots.splice(index, 1);
+  }
+}
+
 function saveJoinedGroups() {
   localStorage.setItem("put1meetJoinedGroups", JSON.stringify([...joinedGroups]));
 }
@@ -797,6 +816,10 @@ function readPhotoFile(file) {
 
 function saveSuggestedSpots() {
   localStorage.setItem("put1meetSuggestedSpots", JSON.stringify(savedSuggestedSpots));
+}
+
+function saveSpotSuggestions() {
+  localStorage.setItem("put1meetSpotSuggestions", JSON.stringify(savedSpotSuggestions));
 }
 
 function saveSiteRoles() {
@@ -1120,6 +1143,18 @@ async function saveSuggestedSpotToSupabase(spot) {
   });
 }
 
+async function deleteCommunitySpotFromSupabase(spotId) {
+  if (!supabaseClient || !currentUser?.supabaseUserId || !spotId || !canReviewSpotSuggestions()) return;
+  await supabaseClient.from("community_spots").delete().eq("id", spotId);
+}
+
+async function purgeTestSpotsFromSupabase() {
+  if (!supabaseClient || !currentUser?.supabaseUserId || !canReviewSpotSuggestions()) return;
+  const { data, error } = await supabaseClient.from("community_spots").select("id, data").limit(300);
+  if (error || !Array.isArray(data)) return;
+  await Promise.all(data.filter((row) => isTestSpot(row.data)).map((row) => deleteCommunitySpotFromSupabase(row.id)));
+}
+
 async function syncBuiltInSpotsToSupabase() {
   if (!supabaseClient || !currentUser?.supabaseUserId || !["owner", "admin"].includes(getSiteRole(getCurrentProfile()))) return;
   const syncKey = `put1meetBuiltInSpotsSynced-${currentUser.supabaseUserId}-v1`;
@@ -1137,11 +1172,18 @@ async function loadSuggestedSpotsFromSupabase() {
     .limit(200);
   if (error || !Array.isArray(data)) return;
   data.forEach((row) => {
-    if (!row.data?.id || spots.some((spot) => spot.id === row.data.id)) return;
+    if (!row.data?.id) return;
+    if (isTestSpot(row.data)) return;
+    if (String(row.data.status || "").toLowerCase() === "pending") {
+      upsertSpotSuggestion(row.data);
+      return;
+    }
+    if (!shouldShowCommunitySpot(row.data) || spots.some((spot) => spot.id === row.data.id)) return;
     spots.push(row.data);
     hydrateSpotGroups(row.data, spots.length - 1);
   });
   sortFeaturedSpotsFirst();
+  renderSpotSuggestionsPanel();
 }
 
 async function saveGroupToSupabase(spotId, group) {
@@ -1299,6 +1341,7 @@ async function migrateLocalDataToSupabase() {
 }
 
 async function loadCommunityDataFromSupabase() {
+  await purgeTestSpotsFromSupabase();
   await syncBuiltInSpotsToSupabase();
   await loadSuggestedSpotsFromSupabase();
   await loadGroupsFromSupabase();
@@ -1510,6 +1553,7 @@ function renderAuthActions() {
   if (!authActions) return;
   document.body.classList.toggle("is-signed-in", Boolean(currentUser));
   document.body.classList.toggle("is-guest", !currentUser);
+  renderSpotSuggestionsPanel();
   if (currentUser) {
     const profile = getCurrentProfile();
     const displayName = profile.name || profile.username || currentUser.email || "Profile";
@@ -1717,6 +1761,7 @@ function getVisibleSpots(filter = activeSpotFilter) {
 function renderSpots(filter = activeSpotFilter) {
   activeSpotFilter = filter;
   const visible = getVisibleSpots(filter);
+  renderSpotSuggestionsPanel();
   if (!visible.length) {
     grid.innerHTML = `
       <div class="empty-spots">
@@ -1750,6 +1795,37 @@ function renderSpots(filter = activeSpotFilter) {
       `,
     )
     .join("");
+}
+
+function renderSpotSuggestionsPanel() {
+  if (!spotSuggestionsPanel || !spotSuggestionsList) return;
+  const canReview = currentUser && canReviewSpotSuggestions();
+  spotSuggestionsPanel.hidden = !canReview;
+  if (!canReview) {
+    spotSuggestionsList.innerHTML = "";
+    return;
+  }
+  const pending = savedSpotSuggestions.filter((spot) => String(spot.status || "pending").toLowerCase() === "pending" && !isTestSpot(spot));
+  spotSuggestionsList.innerHTML = pending.length
+    ? pending
+        .map(
+          (spot) => `
+            <article class="suggestion-card">
+              <img src="${spot.image || fallbackImages.nature}" alt="${spot.name}" loading="lazy" onerror="this.onerror=null; this.src='${fallbackImages.nature}';">
+              <div>
+                <h4>${spot.name}</h4>
+                <p>${spot.area}</p>
+                <small>${spot.mapUrl ? "Google Maps link added" : "No map link"} · ${spot.submittedBy || "Community"}</small>
+              </div>
+              <div class="suggestion-actions">
+                <button class="mini-button secondary" type="button" data-approve-spot="${spot.id}">Approve</button>
+                <button class="mini-button danger" type="button" data-disapprove-spot="${spot.id}">Disapprove</button>
+              </div>
+            </article>
+          `,
+        )
+        .join("")
+    : '<p class="muted-small">No pending spot suggestions.</p>';
 }
 
 function groupMarkup(spot) {
@@ -1875,6 +1951,32 @@ function roleBadgeMarkup(person) {
 
 function canManageSiteRoles() {
   return getSiteRole(getCurrentProfile()) === "owner";
+}
+
+function canReviewSpotSuggestions() {
+  return ["owner", "admin"].includes(getSiteRole(getCurrentProfile()));
+}
+
+function isTestSpot(spot = {}) {
+  const name = String(spot.name || "").trim().toLowerCase();
+  const id = String(spot.id || "").trim().toLowerCase();
+  return name === "test spot" || id.includes("test-spot") || id.includes("suggested-test");
+}
+
+function shouldShowCommunitySpot(spot = {}) {
+  const status = String(spot.status || "approved").toLowerCase();
+  return !isTestSpot(spot) && status !== "pending" && status !== "rejected";
+}
+
+function upsertSpotSuggestion(suggestion) {
+  if (!suggestion?.id || isTestSpot(suggestion)) return;
+  const existingIndex = savedSpotSuggestions.findIndex((item) => item.id === suggestion.id);
+  if (existingIndex >= 0) {
+    savedSpotSuggestions[existingIndex] = { ...savedSpotSuggestions[existingIndex], ...suggestion };
+  } else {
+    savedSpotSuggestions.unshift(suggestion);
+  }
+  saveSpotSuggestions();
 }
 
 function siteRoleDescription(person) {
@@ -3487,6 +3589,45 @@ document.addEventListener("click", async (event) => {
     return;
   }
 
+  const approveSpotButton = event.target.closest("[data-approve-spot]");
+  if (approveSpotButton) {
+    if (!requireLogin("Sign in or sign up first to approve spots.")) return;
+    if (!canReviewSpotSuggestions()) return;
+    const spotId = approveSpotButton.dataset.approveSpot;
+    const suggestion = savedSpotSuggestions.find((spot) => spot.id === spotId);
+    if (!suggestion) return;
+    const approvedSpot = { ...suggestion, status: "approved" };
+    const suggestionIndex = savedSpotSuggestions.findIndex((spot) => spot.id === spotId);
+    if (suggestionIndex >= 0) savedSpotSuggestions.splice(suggestionIndex, 1);
+    saveSpotSuggestions();
+    if (!savedSuggestedSpots.some((spot) => spot.id === spotId)) {
+      savedSuggestedSpots.unshift(approvedSpot);
+      saveSuggestedSpots();
+    }
+    if (!spots.some((spot) => spot.id === spotId)) {
+      spots.unshift(approvedSpot);
+      hydrateSpotGroups(approvedSpot, 0);
+    }
+    await saveSuggestedSpotToSupabase(approvedSpot);
+    sortFeaturedSpotsFirst();
+    renderSpots(activeSpotFilter);
+    renderSpotSuggestionsPanel();
+    return;
+  }
+
+  const disapproveSpotButton = event.target.closest("[data-disapprove-spot]");
+  if (disapproveSpotButton) {
+    if (!requireLogin("Sign in or sign up first to disapprove spots.")) return;
+    if (!canReviewSpotSuggestions()) return;
+    const spotId = disapproveSpotButton.dataset.disapproveSpot;
+    const suggestionIndex = savedSpotSuggestions.findIndex((spot) => spot.id === spotId);
+    if (suggestionIndex >= 0) savedSpotSuggestions.splice(suggestionIndex, 1);
+    saveSpotSuggestions();
+    await deleteCommunitySpotFromSupabase(spotId);
+    renderSpotSuggestionsPanel();
+    return;
+  }
+
   const toggleCreateGroupButton = event.target.closest("[data-toggle-create-group]");
   if (toggleCreateGroupButton) {
     if (!requireLogin("Sign in or sign up first to make a group.")) return;
@@ -4032,6 +4173,7 @@ document.addEventListener("submit", async (event) => {
   const suggestionForm = event.target.closest("[data-spot-suggestion-form]");
   if (suggestionForm) {
     event.preventDefault();
+    if (!requireLogin("Sign in or sign up first to suggest a spot.")) return;
     const formData = new FormData(suggestionForm);
     const name = formData.get("spotName").trim();
     const area = formData.get("area").trim();
@@ -4047,13 +4189,13 @@ document.addEventListener("submit", async (event) => {
         area,
         tags: ["nature"],
         mood: "Community suggestion",
+        status: "pending",
+        submittedBy: currentUser?.name || currentUser?.username || "Community",
+        submittedById: currentUser?.supabaseUserId || "",
         image: photo || fallbackImages.nature,
         mapUrl: mapUrl || `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${name} ${area}`)}`,
         blurb: "A community-suggested public spot. Check access, daylight, and local rules before planning a meet.",
-        groups: [
-          { day: "Saturday", date: "Next open", time: "6:30 AM", people: 3 },
-          { day: "Sunday", date: "Next open", time: "5:00 PM", people: 2 },
-        ],
+        groups: [],
         tips: [
           "Verify the route on Google Maps before leaving.",
           "Use public access only and avoid private or restricted areas.",
@@ -4070,16 +4212,12 @@ document.addEventListener("submit", async (event) => {
             ]
           : [],
       };
-      savedSuggestedSpots.push(newSpot);
-      saveSuggestedSpots();
+      upsertSpotSuggestion(newSpot);
       await saveSuggestedSpotToSupabase(newSpot);
-      spots.push(newSpot);
-      hydrateSpotGroups(newSpot, spots.length - 1);
-      const activeFilter = document.querySelector(".filter.active")?.dataset.filter || "all";
-      renderSpots(activeFilter);
+      renderSpotSuggestionsPanel();
       suggestionForm.reset();
       if (message) {
-        message.textContent = `${name} was added to the spot list.`;
+        message.textContent = `${name} was sent for admin review.`;
         message.hidden = false;
       }
     } catch {
@@ -4296,6 +4434,7 @@ function openSharedProfileFromHash() {
 
 async function initializeApp() {
   purgeDummyProfileData();
+  purgeTestSpotData();
   renderAuthActions();
   await loadPublicProfiles();
   await loadFollowGraph();
