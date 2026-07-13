@@ -608,9 +608,6 @@ const featuredSpotOrder = [
   "bannerghatta-quarry-edge",
   "turahalli-forest-road",
   "hanumagiri-hills",
-  "doresanipalya-forest",
-  "avalahalli-forest",
-  "turahalli-rocks",
   "airport-plane-spotting",
   "kothanur-stalled-builds",
 ];
