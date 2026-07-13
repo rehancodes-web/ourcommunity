@@ -1896,6 +1896,7 @@ async function saveCustomGroupChatToSupabase(chat) {
     name: chat.name,
     created_by: chat.createdBy || currentUser.supabaseUserId,
     member_ids: chat.memberIds || [currentUser.supabaseUserId],
+    request_ids: chat.requestIds || [],
     data: chat,
     updated_at: new Date().toISOString(),
   });
@@ -1914,17 +1915,24 @@ async function loadCustomGroupChatsFromSupabase() {
   if (!supabaseClient || !currentUser?.supabaseUserId) return;
   const { data: tableData, error: tableError } = await supabaseClient
     .from("inbox_group_chats")
-    .select("id, name, created_by, member_ids, data, created_at, updated_at")
+    .select("id, name, created_by, member_ids, request_ids, data, created_at, updated_at")
     .contains("member_ids", [currentUser.supabaseUserId])
     .order("updated_at", { ascending: false })
     .limit(200);
-  if (!tableError && Array.isArray(tableData)) {
-    tableData.forEach((row) =>
+  const { data: requestData, error: requestError } = await supabaseClient
+    .from("inbox_group_chats")
+    .select("id, name, created_by, member_ids, request_ids, data, created_at, updated_at")
+    .contains("request_ids", [currentUser.supabaseUserId])
+    .order("updated_at", { ascending: false })
+    .limit(200);
+  if (!tableError && !requestError && Array.isArray(tableData) && Array.isArray(requestData)) {
+    [...tableData, ...requestData].forEach((row) =>
       mergeCustomGroupChat({
         ...(row.data || {}),
         id: row.id,
         name: row.name,
         memberIds: row.member_ids || row.data?.memberIds || [],
+        requestIds: row.request_ids || row.data?.requestIds || [],
         createdBy: row.created_by || row.data?.createdBy || "",
         createdAt: row.created_at || row.data?.createdAt || "",
       }),
@@ -1942,7 +1950,7 @@ async function loadCustomGroupChatsFromSupabase() {
   data.forEach((row) => {
     try {
       const chat = JSON.parse(String(row.body || "").replace(GROUP_CHAT_META_PREFIX, ""));
-      if (chat.memberIds?.includes(currentUser.supabaseUserId)) mergeCustomGroupChat(chat);
+      if (chat.memberIds?.includes(currentUser.supabaseUserId) || chat.requestIds?.includes(currentUser.supabaseUserId)) mergeCustomGroupChat(chat);
     } catch {
       // Ignore broken metadata rows.
     }
@@ -1957,6 +1965,39 @@ function getCustomGroupChatEntries() {
       members: (chat.memberIds || []).map(findProfileBySupabaseId).filter(Boolean),
       messages: chatStore[`custom-group-${chat.id}`] || [],
     }));
+}
+
+function getCustomGroupChatRequestEntries() {
+  return customGroupChats
+    .filter((chat) => chat.requestIds?.includes(currentUser?.supabaseUserId) && !chat.memberIds?.includes(currentUser?.supabaseUserId))
+    .map((chat) => ({
+      ...chat,
+      creator: findProfileBySupabaseId(chat.createdBy),
+      members: (chat.memberIds || []).map(findProfileBySupabaseId).filter(Boolean),
+    }));
+}
+
+async function acceptCustomGroupChatRequest(chatId) {
+  const chat = customGroupChats.find((item) => item.id === chatId);
+  if (!chat || !currentUser?.supabaseUserId) return false;
+  const updatedChat = {
+    ...chat,
+    memberIds: [...new Set([...(chat.memberIds || []), currentUser.supabaseUserId])],
+    requestIds: (chat.requestIds || []).filter((id) => id !== currentUser.supabaseUserId),
+  };
+  if (!supabaseClient) return false;
+  const { error } = await supabaseClient
+    .from("inbox_group_chats")
+    .update({
+      member_ids: updatedChat.memberIds,
+      request_ids: updatedChat.requestIds,
+      data: updatedChat,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", chatId);
+  if (error) return false;
+  mergeCustomGroupChat(updatedChat);
+  return true;
 }
 
 function groupLabel(spot, group) {
@@ -1996,6 +2037,42 @@ function getTrustedDmEntries() {
 function getRequestDmEntries() {
   const savedRandomDms = getDmEntries().filter((entry) => !isTrustedPerson(entry.person));
   return savedRandomDms;
+}
+
+function getPeopleWhoFollowCurrentUserIds() {
+  const currentUserId = currentUser?.supabaseUserId;
+  if (!currentUserId) return new Set();
+  return new Set(
+    followRows
+      .filter((row) => row.following_id === currentUserId)
+      .map((row) => row.follower_id),
+  );
+}
+
+function getPeopleWhoRepliedToCurrentUserIds() {
+  const currentUserId = currentUser?.supabaseUserId;
+  if (!currentUserId) return new Set();
+  const repliedIds = new Set();
+  Object.entries(chatStore).forEach(([key, messages]) => {
+    if (!key.startsWith("dm-")) return;
+    (messages || []).forEach((message) => {
+      if (message.senderId && message.senderId !== currentUserId) repliedIds.add(message.senderId);
+    });
+  });
+  return repliedIds;
+}
+
+function getGroupChatCandidateProfiles() {
+  const followerIds = getPeopleWhoFollowCurrentUserIds();
+  const repliedIds = getPeopleWhoRepliedToCurrentUserIds();
+  return publicProfiles
+    .filter((person) => person.id !== currentUser?.supabaseUserId)
+    .filter((person) => followerIds.has(person.id) || repliedIds.has(person.id))
+    .sort((a, b) => {
+      const aFollower = followerIds.has(a.id) ? 0 : 1;
+      const bFollower = followerIds.has(b.id) ? 0 : 1;
+      return aFollower - bFollower || String(a.name).localeCompare(String(b.name));
+    });
 }
 
 function getRelationshipLabel(person) {
@@ -2561,6 +2638,9 @@ async function openInbox(mode = "messages") {
   const dms = getTrustedDmEntries();
   const groups = getJoinedGroupEntries();
   const customGroups = getCustomGroupChatEntries();
+  const groupChatRequests = getCustomGroupChatRequestEntries();
+  const groupChatCandidates = getGroupChatCandidateProfiles();
+  const followerIds = getPeopleWhoFollowCurrentUserIds();
   const invites = getInviteEntries();
   const requests = getRequestEntries();
   const requestDms = getRequestDmEntries();
@@ -2575,7 +2655,7 @@ async function openInbox(mode = "messages") {
           <h2>Inbox</h2>
         </div>
         <button class="requests-button ${isRequests ? "active" : ""}" data-inbox-tab="requests">
-          Requests <span>${requests.length + requestDms.length}</span>
+          Requests <span>${requests.length + requestDms.length + groupChatRequests.length}</span>
         </button>
       </div>
       <div class="inbox-tabs" role="group" aria-label="Messenger sections">
@@ -2648,19 +2728,21 @@ async function openInbox(mode = "messages") {
           <form class="group-chat-form" data-group-chat-form hidden>
             <input name="groupName" placeholder="Group chat name" required>
             <div class="group-chat-picker">
-              ${publicProfiles
-                .filter((person) => person.id !== currentUser.supabaseUserId)
+              ${groupChatCandidates
                 .slice(0, 12)
                 .map(
                   (person) => `
                     <label>
                       <input type="checkbox" name="memberIds" value="${person.id}">
                       <span class="avatar">${profileInitials(person)}</span>
-                      <strong>${person.username ? `@${person.username.replace(/^@/, "")}` : person.name}</strong>
+                      <span>
+                        <strong>${person.username ? `@${person.username.replace(/^@/, "")}` : person.name}</strong>
+                        <small>${followerIds.has(person.id) ? "Follows you" : "Replied to your DM - sends request"}</small>
+                      </span>
                     </label>
                   `,
                 )
-                .join("")}
+                .join("") || '<p class="muted-small">No eligible people yet. People appear here when they follow you or reply to your DM.</p>'}
             </div>
             <button class="mini-button secondary" type="submit">Create group chat</button>
           </form>
@@ -2727,6 +2809,28 @@ async function openInbox(mode = "messages") {
                 .join("")
             : '<p class="muted-small">No message requests right now.</p>'
         }
+        <div class="inbox-subsection">
+          <h4>Group chat requests</h4>
+        ${
+          groupChatRequests.length
+            ? groupChatRequests
+                .map(
+                  (chat) => `
+                    <div class="inbox-item invite-card request">
+                      <span class="avatar">GC</span>
+                      <span>
+                        <strong>${chat.name}</strong>
+                        <em>${chat.creator?.name || "Someone"} invited you to a group chat</em>
+                        <small>${chat.members.map((person) => person.name).slice(0, 3).join(", ") || "New group chat"}</small>
+                      </span>
+                      <button class="mini-button gold" data-accept-group-chat="${chat.id}">Accept</button>
+                    </div>
+                  `,
+                )
+                .join("")
+            : '<p class="muted-small">No group chat requests right now.</p>'
+        }
+        </div>
         <div class="inbox-subsection">
           <h4>Meet requests</h4>
         ${
@@ -3517,10 +3621,14 @@ document.addEventListener("submit", async (event) => {
     if (!requireLogin("Sign in or sign up first to make group chats.")) return;
     const formData = new FormData(groupChatForm);
     const selectedIds = formData.getAll("memberIds").filter(isSupabaseId);
-    const memberIds = [...new Set([currentUser.supabaseUserId, ...selectedIds])];
+    const eligibleIds = new Set(getGroupChatCandidateProfiles().map((person) => person.id));
+    const followerIds = getPeopleWhoFollowCurrentUserIds();
+    const allowedSelectedIds = [...new Set(selectedIds)].filter((id) => eligibleIds.has(id));
+    const memberIds = [...new Set([currentUser.supabaseUserId, ...allowedSelectedIds.filter((id) => followerIds.has(id))])];
+    const requestIds = allowedSelectedIds.filter((id) => !followerIds.has(id));
     const groupName = String(formData.get("groupName") || "").trim();
     groupChatForm.querySelector(".complete-warning")?.remove();
-    if (!groupName || memberIds.length < 2) {
+    if (!groupName || allowedSelectedIds.length < 1) {
       groupChatForm.insertAdjacentHTML(
         "afterbegin",
         '<p class="complete-warning">Add a group name and choose at least one person.</p>',
@@ -3531,6 +3639,7 @@ document.addEventListener("submit", async (event) => {
       id: `gc-${Date.now()}`,
       name: groupName,
       memberIds,
+      requestIds,
       createdBy: currentUser.supabaseUserId,
       createdAt: new Date().toISOString(),
     };
