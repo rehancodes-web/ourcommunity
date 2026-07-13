@@ -2039,7 +2039,10 @@ function renderProfileSearch(query) {
   if (!term) {
     searchResults.hidden = true;
     searchResults.innerHTML = "";
-    searchShell?.classList.remove("search-open");
+    if (document.activeElement !== profileSearch) {
+      searchShell?.classList.remove("search-open");
+      document.body.classList.remove("searching-profiles");
+    }
     return;
   }
   const matches = getAllProfiles()
@@ -2067,6 +2070,8 @@ function renderProfileSearch(query) {
     : '<p>No profiles found.</p>';
   searchResults.hidden = false;
   searchShell?.classList.add("search-open");
+  document.body.classList.add("searching-profiles");
+  positionMobileSearchResults();
 }
 
 function getJoinedGroupEntries() {
@@ -3275,12 +3280,30 @@ async function openOwnerProfile() {
   showWelcome("Rehan's profile is not available yet. Try again after the profile syncs.");
 }
 
+function openProfileSearchMode() {
+  profileSearch.closest(".profile-search")?.classList.add("search-open");
+  document.body.classList.add("searching-profiles");
+  positionMobileSearchResults();
+}
+
+function closeProfileSearchMode() {
+  searchResults.hidden = true;
+  profileSearch.closest(".profile-search")?.classList.remove("search-open");
+  document.body.classList.remove("searching-profiles");
+  searchResults.style.removeProperty("--mobile-search-top");
+}
+
+function positionMobileSearchResults() {
+  if (!window.matchMedia("(max-width: 620px)").matches || searchResults.hidden) return;
+  const inputBox = profileSearch.getBoundingClientRect();
+  searchResults.style.setProperty("--mobile-search-top", `${Math.max(86, Math.round(inputBox.bottom + 6))}px`);
+}
+
 function openSearchedProfileFromButton(button) {
   if (!button) return;
   if (!requireLogin("Sign in or sign up first to search and view profiles.")) return;
   profileSearch.value = "";
-  searchResults.hidden = true;
-  profileSearch.closest(".profile-search")?.classList.remove("search-open");
+  closeProfileSearchMode();
   openProfile(button.dataset.searchProfile);
 }
 
@@ -3684,13 +3707,25 @@ closeChat.addEventListener("click", hideChat);
 chatBackdrop.addEventListener("click", hideChat);
 
 profileSearch.addEventListener("input", () => renderProfileSearch(profileSearch.value));
-profileSearch.addEventListener("focus", () => renderProfileSearch(profileSearch.value));
+profileSearch.addEventListener("focus", () => {
+  openProfileSearchMode();
+  renderProfileSearch(profileSearch.value);
+});
+profileSearch.addEventListener("click", openProfileSearchMode);
 searchResults.addEventListener("pointerdown", (event) => {
   const searchedProfileButton = event.target.closest("[data-search-profile]");
   if (!searchedProfileButton) return;
   event.preventDefault();
+  event.stopPropagation();
   openSearchedProfileFromButton(searchedProfileButton);
 });
+searchResults.addEventListener("touchstart", (event) => {
+  const searchedProfileButton = event.target.closest("[data-search-profile]");
+  if (!searchedProfileButton) return;
+  event.preventDefault();
+  event.stopPropagation();
+  openSearchedProfileFromButton(searchedProfileButton);
+}, { passive: false });
 useLocationButton?.addEventListener("click", requestUserLocation);
 distanceFilter?.addEventListener("change", () => {
   distanceLimitKm = distanceFilter.value;
@@ -3699,10 +3734,11 @@ distanceFilter?.addEventListener("change", () => {
 
 document.addEventListener("click", (event) => {
   if (!event.target.closest(".profile-search")) {
-    searchResults.hidden = true;
-    profileSearch.closest(".profile-search")?.classList.remove("search-open");
+    closeProfileSearchMode();
   }
 });
+
+window.addEventListener("resize", positionMobileSearchResults, { passive: true });
 
 document.querySelectorAll(".auth-tab").forEach((tab) => {
   tab.addEventListener("click", () => setAuthMode(tab.dataset.authTab));

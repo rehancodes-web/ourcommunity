@@ -2000,6 +2000,15 @@ select {
     -webkit-overflow-scrolling: touch;
   }
 
+  body.searching-profiles .profile-search .search-results {
+    position: fixed;
+    top: var(--mobile-search-top, 112px);
+    right: 16px;
+    left: 16px;
+    z-index: 999;
+    width: auto;
+  }
+
   .auth-button:not(.compact) {
     flex: 1;
     min-height: 42px;
@@ -2135,6 +2144,7 @@ select {
   }
 
   body.has-scrolled.is-signed-in .profile-search.search-open,
+  body.searching-profiles.has-scrolled.is-signed-in .profile-search,
   body.has-scrolled.is-signed-in .profile-search:focus-within {
     max-height: 68px;
     opacity: 1;
