@@ -2872,10 +2872,10 @@ async function openProfile(personId) {
           isMe
             ? '<button class="mini-button secondary" data-complete-profile>Complete profile</button>'
             : `
-              <button class="mini-button ${isFollowing ? "" : "gold"}" data-follow-person="${person.id}">
+              <button class="mini-button ${isFollowing ? "" : "gold"}" type="button" data-follow-person="${person.id}">
                 ${isFollowing ? "Following" : "Follow"}
               </button>
-              <button class="mini-button secondary" data-direct-chat="${person.id}">Message</button>
+              <button class="mini-button secondary" type="button" data-direct-chat="${person.id}">Message</button>
             `
         }
       </div>
@@ -3526,6 +3526,24 @@ function openSearchedProfileFromButton(button) {
   openProfile(button.dataset.searchProfile);
 }
 
+async function handleFollowButton(followButton) {
+  if (!followButton) return;
+  if (!requireLogin("Sign in or sign up first to follow people.")) return;
+  const personId = followButton.dataset.followPerson;
+  if (!personId) return;
+  followButton.disabled = true;
+  let shouldFollow = false;
+  if (followedPeople.has(personId)) {
+    followedPeople.delete(personId);
+  } else {
+    followedPeople.add(personId);
+    shouldFollow = true;
+  }
+  saveFollowedPeople();
+  await saveFollowToSupabase(personId, shouldFollow);
+  await openProfile(personId);
+}
+
 document.addEventListener("click", async (event) => {
   const ownerProfileButton = event.target.closest("[data-open-owner-profile]");
   if (ownerProfileButton) {
@@ -3574,18 +3592,7 @@ document.addEventListener("click", async (event) => {
 
   const followButton = event.target.closest("[data-follow-person]");
   if (followButton) {
-    if (!requireLogin("Sign in or sign up first to follow people.")) return;
-    const personId = followButton.dataset.followPerson;
-    let shouldFollow = false;
-    if (followedPeople.has(personId)) {
-      followedPeople.delete(personId);
-    } else {
-      followedPeople.add(personId);
-      shouldFollow = true;
-    }
-    saveFollowedPeople();
-    await saveFollowToSupabase(personId, shouldFollow);
-    openProfile(personId);
+    await handleFollowButton(followButton);
     return;
   }
 
@@ -3992,6 +3999,24 @@ searchResults.addEventListener("touchstart", (event) => {
   event.stopPropagation();
   openSearchedProfileFromButton(searchedProfileButton);
 }, { passive: false });
+
+let lastMobileFollowTap = 0;
+async function handleMobileFollowTap(event) {
+  const followButton = event.target.closest("[data-follow-person]");
+  if (!followButton) return;
+  const now = Date.now();
+  if (now - lastMobileFollowTap < 500) return;
+  lastMobileFollowTap = now;
+  event.preventDefault();
+  event.stopPropagation();
+  await handleFollowButton(followButton);
+}
+
+drawerContent.addEventListener("pointerup", (event) => {
+  if (!window.matchMedia("(pointer: coarse)").matches) return;
+  handleMobileFollowTap(event);
+});
+drawerContent.addEventListener("touchend", handleMobileFollowTap, { passive: false });
 useLocationButton?.addEventListener("click", requestUserLocation);
 distanceFilter?.addEventListener("change", () => {
   distanceLimitKm = distanceFilter.value;
