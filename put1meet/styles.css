@@ -180,16 +180,23 @@ nav {
 }
 
 .profile-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  min-height: 44px;
-  padding: 5px 10px 5px 5px;
-  background: white;
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  background: transparent;
   border: 1px solid var(--line);
-  border-radius: 8px;
+  border-radius: 999px;
   cursor: pointer;
   font-weight: 850;
+}
+
+.profile-chip:hover,
+.settings-icon-button:hover,
+.messenger-button:hover {
+  border-color: #b9ab96;
+  transform: translateY(-1px);
 }
 
 .messenger-button {
@@ -255,14 +262,60 @@ nav {
 }
 
 .profile-chip .avatar {
-  width: 32px;
-  height: 32px;
+  width: 38px;
+  height: 38px;
 }
 
-.profile-chip span:last-child {
-  max-width: 120px;
+.profile-chip > span:not(.avatar) {
+  display: none;
+}
+
+.auth-actions > [data-signout] {
+  display: none;
+}
+
+.auth-actions > [data-open-settings] {
+  display: grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  min-height: 38px;
+  padding: 0;
   overflow: hidden;
-  text-overflow: ellipsis;
+  background: white;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: transparent;
+  font-size: 0;
+  line-height: 1;
+}
+
+.auth-actions > [data-open-settings]::before {
+  content: "⚙";
+  color: var(--ink);
+  font-size: 20px;
+}
+
+.settings-icon-button {
+  display: grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  padding: 0;
+  background: white;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: var(--ink);
+  cursor: pointer;
+  font-size: 20px;
+  font-weight: 850;
+  line-height: 1;
+}
+
+.auth-button.compact {
+  min-height: 38px;
+  padding: 0 12px;
+  font-size: 13px;
   white-space: nowrap;
 }
 
@@ -361,6 +414,12 @@ nav {
 
 .auth-button.primary-lite,
 .auth-tab.active {
+  color: white;
+  background: var(--ink);
+  border-color: var(--ink);
+}
+
+.mini-button.danger {
   color: white;
   background: var(--ink);
   border-color: var(--ink);
@@ -1233,7 +1292,7 @@ select {
 
 .inbox-tabs {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 10px;
   margin: 16px 0 10px;
 }
@@ -1271,8 +1330,48 @@ select {
   margin-top: 18px;
 }
 
+.subsection-head {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+}
+
 .inbox-section h4 {
   margin: 0;
+}
+
+.group-chat-form {
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+  background: #fffaf0;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+
+.group-chat-picker {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 8px;
+}
+
+.group-chat-picker label {
+  display: grid;
+  grid-template-columns: auto 34px 1fr;
+  gap: 8px;
+  align-items: center;
+  padding: 8px;
+  background: white;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  font-weight: 850;
+}
+
+.group-chat-picker input {
+  width: 18px;
+  height: 18px;
 }
 
 .inbox-item {
@@ -1440,8 +1539,23 @@ select {
   text-align: center;
 }
 
-.insta-stats div {
+.insta-stats div,
+.insta-stats button {
   min-width: 0;
+}
+
+.insta-stats button {
+  padding: 0;
+  background: transparent;
+  border: 0;
+  color: inherit;
+  cursor: pointer;
+  font: inherit;
+}
+
+.insta-stats button:hover span,
+.insta-stats button:focus-visible span {
+  color: var(--teal);
 }
 
 .insta-stats strong {
@@ -1502,6 +1616,14 @@ select {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 8px;
+}
+
+.settings-footer {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
 }
 
 .mutual-summary {
@@ -1632,6 +1754,7 @@ select {
     width: 100%;
     flex-wrap: wrap;
     gap: 6px;
+    justify-content: flex-end;
   }
 
   .profile-search {
@@ -1643,39 +1766,90 @@ select {
     min-height: 38px;
   }
 
-  .auth-button {
+  .auth-button:not(.compact) {
     flex: 1;
     min-height: 42px;
     padding: 10px 12px;
   }
 
-  .profile-chip {
-    flex: 1 1 100%;
+  .auth-button.compact {
+    flex: 1 1 auto;
+    min-height: 36px;
+    padding: 0 10px;
   }
 
   body.is-signed-in .topbar {
     position: sticky;
+    display: grid;
+    grid-template-columns: 1fr auto;
+    align-items: start;
   }
 
   body.is-signed-in .nav-shell {
+    display: contents;
+  }
+
+  body.is-signed-in nav {
+    grid-column: 1 / -1;
+    grid-row: 2;
+  }
+
+  body.is-signed-in .profile-search {
+    grid-column: 1 / -1;
+    grid-row: 3;
+  }
+
+  body.is-signed-in .auth-actions {
+    grid-column: 2;
+    grid-row: 1;
+    width: auto;
+    max-width: min(58vw, 260px);
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    flex-wrap: wrap;
+  }
+
+  body.is-signed-in .auth-actions .messenger-button {
+    order: 1;
+  }
+
+  body.is-signed-in .auth-actions .profile-chip {
+    order: 2;
+  }
+
+  body.is-signed-in .auth-actions [data-open-settings],
+  body.is-signed-in .auth-actions .settings-icon-button {
+    order: 3;
+  }
+
+  body.is-signed-in .auth-actions .auth-button.compact {
+    order: 4;
+  }
+
+  body.is-signed-in .auth-actions [data-signout] {
+    display: none;
+  }
+
+  body.is-guest .nav-shell {
     display: grid;
     grid-template-columns: 1fr;
   }
 
-  body.is-signed-in .auth-actions {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
   body.is-signed-in .messenger-button,
   body.is-signed-in .profile-chip,
-  body.is-signed-in .auth-button {
+  body.is-signed-in .settings-icon-button,
+  body.is-signed-in [data-open-settings] {
     min-width: 0;
-    width: 100%;
+    flex: 0 0 auto;
+  }
+
+  body.is-signed-in .auth-button.compact {
+    flex: 0 1 auto;
   }
 
   body.is-signed-in .topbar-message {
-    grid-column: 1 / -1;
+    flex: 1 1 100%;
   }
 
   .chat-form,
