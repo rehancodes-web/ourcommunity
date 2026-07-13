@@ -975,11 +975,30 @@ function directProfileIdFromChatKey(chatKey) {
   return ids.find((id) => id !== currentUser?.supabaseUserId) || ids[0] || "";
 }
 
+function isDmKeyForCurrentUser(chatKey) {
+  if (!chatKey?.startsWith("dm-") || !currentUser?.supabaseUserId) return false;
+  const ids = chatKey.replace("dm-", "").split("--").filter(isSupabaseId);
+  return ids.length >= 2 && ids.includes(currentUser.supabaseUserId);
+}
+
+function purgeDmStoreForCurrentUser() {
+  if (!currentUser?.supabaseUserId) return;
+  let changed = false;
+  Object.keys(chatStore).forEach((key) => {
+    if (key.startsWith("dm-") && !isDmKeyForCurrentUser(key)) {
+      delete chatStore[key];
+      changed = true;
+    }
+  });
+  if (changed) saveObject("put1meetChats", chatStore);
+}
+
 function messageRowToLocal(row) {
   if (String(row.body || "").startsWith(GROUP_CHAT_META_PREFIX)) return null;
   return {
     sender: row.sender_name || "Explorer",
     senderId: row.sender_id || "",
+    recipientId: row.recipient_id || "",
     text: row.body || "",
     createdAt: row.created_at || "",
     synced: true,
@@ -988,7 +1007,8 @@ function messageRowToLocal(row) {
 
 async function loadChatMessagesFromSupabase(chatKey) {
   const canonicalKey = canonicalChatKey(chatKey);
-  if (!supabaseClient || !currentUser?.supabaseUserId) return chatStore[canonicalKey] || chatStore[chatKey] || [];
+  if (canonicalKey?.startsWith("dm-") && !isDmKeyForCurrentUser(canonicalKey)) return [];
+  if (!supabaseClient || !currentUser?.supabaseUserId) return chatStore[canonicalKey] || [];
   const recipientId = chatRecipientId(canonicalKey);
   const keys = canonicalKey.startsWith("dm-")
     ? [...new Set([chatKey, canonicalKey, recipientId ? `dm-${recipientId}` : "", `dm-${currentUser.supabaseUserId}`].filter(Boolean))]
@@ -1000,7 +1020,7 @@ async function loadChatMessagesFromSupabase(chatKey) {
     .in("chat_key", keys)
     .order("created_at", { ascending: true })
     .limit(200);
-  if (error || !Array.isArray(data)) return chatStore[canonicalKey] || chatStore[chatKey] || [];
+  if (error || !Array.isArray(data)) return chatStore[canonicalKey] || [];
   const existing = chatStore[canonicalKey] || [];
   chatStore[canonicalKey] = [...existing];
   data.forEach((row) => {
@@ -1018,6 +1038,7 @@ async function loadChatMessagesFromSupabase(chatKey) {
 
 async function loadMyDmMessagesFromSupabase() {
   if (!supabaseClient || !currentUser?.supabaseUserId) return;
+  purgeDmStoreForCurrentUser();
   const { data, error } = await supabaseClient
     .from("messages")
     .select("id, chat_key, sender_id, recipient_id, sender_name, body, created_at")
@@ -1028,7 +1049,7 @@ async function loadMyDmMessagesFromSupabase() {
   if (error || !Array.isArray(data)) return;
   data.forEach((row) => {
     const key = canonicalChatKey(row.chat_key, row);
-    if (!key) return;
+    if (!key || !isDmKeyForCurrentUser(key)) return;
     chatStore[key] = chatStore[key] || [];
     if (!chatStore[key].some((message) => message.createdAt && message.createdAt === row.created_at)) {
       const localMessage = messageRowToLocal(row);
@@ -1234,6 +1255,7 @@ async function migrateLocalDataToSupabase() {
 
   if (!dmsAlreadyMigrated) {
     for (const [chatKey, messages] of Object.entries(chatStore)) {
+      if (chatKey.startsWith("dm-") && !isDmKeyForCurrentUser(chatKey)) continue;
       for (const message of messages || []) {
         if (message.synced || message.supabaseMigratedV2 || !message.text) continue;
         const saved = await saveChatMessageToSupabase(chatKey, message.text);
@@ -2156,6 +2178,7 @@ function getSharedGroupsWithPerson(personId) {
 function getDmEntries() {
   return Object.entries(chatStore)
     .filter(([key, messages]) => key.startsWith("dm-") && messages.length)
+    .filter(([key]) => isDmKeyForCurrentUser(key))
     .map(([key, messages]) => {
       const person = findPerson(directProfileIdFromChatKey(key));
       if (person) {

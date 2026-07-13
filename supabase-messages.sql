@@ -29,7 +29,11 @@ for select
 using (
   sender_id = auth.uid()
   or recipient_id = auth.uid()
-  or (recipient_id is null and auth.uid() is not null)
+  or (
+    recipient_id is null
+    and chat_key like 'custom-group-%'
+    and auth.uid() is not null
+  )
 );
 
 drop policy if exists "Users can send their own messages" on public.messages;
