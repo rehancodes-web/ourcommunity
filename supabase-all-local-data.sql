@@ -65,11 +65,18 @@ create table if not exists public.inbox_group_chats (
   name text not null,
   created_by uuid not null references auth.users(id) on delete cascade,
   member_ids uuid[] not null,
+  request_ids uuid[] not null default '{}'::uuid[],
   data jsonb not null default '{}'::jsonb,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
-  check (array_length(member_ids, 1) >= 2)
+  check (array_length(member_ids, 1) >= 1 and (array_length(member_ids, 1) + coalesce(array_length(request_ids, 1), 0)) >= 2)
 );
+
+alter table public.inbox_group_chats add column if not exists request_ids uuid[] not null default '{}'::uuid[];
+alter table public.inbox_group_chats drop constraint if exists inbox_group_chats_member_ids_check;
+alter table public.inbox_group_chats drop constraint if exists inbox_group_chats_member_request_check;
+alter table public.inbox_group_chats add constraint inbox_group_chats_member_request_check
+check (array_length(member_ids, 1) >= 1 and (array_length(member_ids, 1) + coalesce(array_length(request_ids, 1), 0)) >= 2);
 
 create index if not exists meet_groups_spot_id_idx on public.meet_groups (spot_id);
 create index if not exists group_members_user_id_idx on public.group_members (user_id);
@@ -79,6 +86,7 @@ create index if not exists messages_chat_key_created_at_idx on public.messages (
 create index if not exists messages_sender_id_idx on public.messages (sender_id);
 create index if not exists messages_recipient_id_idx on public.messages (recipient_id);
 create index if not exists inbox_group_chats_member_ids_idx on public.inbox_group_chats using gin (member_ids);
+create index if not exists inbox_group_chats_request_ids_idx on public.inbox_group_chats using gin (request_ids);
 
 alter table public.community_spots enable row level security;
 alter table public.meet_groups enable row level security;
@@ -142,6 +150,7 @@ create policy "Users can send their own messages" on public.messages for insert 
 drop policy if exists "Members can read inbox group chats" on public.inbox_group_chats;
 create policy "Members can read inbox group chats" on public.inbox_group_chats for select using (
   auth.uid() = any(member_ids)
+  or auth.uid() = any(request_ids)
 );
 drop policy if exists "Users can create inbox group chats" on public.inbox_group_chats;
 create policy "Users can create inbox group chats" on public.inbox_group_chats for insert with check (
@@ -149,11 +158,13 @@ create policy "Users can create inbox group chats" on public.inbox_group_chats f
   and auth.uid() = any(member_ids)
 );
 drop policy if exists "Creators can update inbox group chats" on public.inbox_group_chats;
-create policy "Creators can update inbox group chats" on public.inbox_group_chats for update using (
+drop policy if exists "Creators and requested users can update inbox group chats" on public.inbox_group_chats;
+create policy "Creators and requested users can update inbox group chats" on public.inbox_group_chats for update using (
   auth.uid() = created_by
+  or auth.uid() = any(request_ids)
 ) with check (
   auth.uid() = created_by
-  and auth.uid() = any(member_ids)
+  or auth.uid() = any(member_ids)
 );
 
 update public.profiles

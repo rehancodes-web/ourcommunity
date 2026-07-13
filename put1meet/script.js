@@ -2275,8 +2275,8 @@ async function openProfile(personId) {
   if (!person) return;
   const isMe = person.id === "me";
   const isFollowing = followedPeople.has(person.id);
-  const mutualCount = getMutualCount(person);
   const displayUsername = person.username ? `@${person.username.replace(/^@/, "")}` : person.instagram || "Username not added";
+  const instagramHandle = person.instagram ? `@${person.instagram.replace(/^@/, "")}` : "Instagram not added";
   drawerContent.innerHTML = `
     <div class="profile-panel">
       ${!isProfileComplete(person) ? '<p class="complete-warning">Complete your profile so people know who they are meeting.</p>' : ""}
@@ -2288,8 +2288,8 @@ async function openProfile(personId) {
         <div class="profile-main">
           <div class="profile-title-row">
             <div>
-              <h3>${displayUsername}${roleBadgeMarkup(person)}</h3>
-              <span>${person.instagram || "Instagram not added"}</span>
+              <h3>${person.name || "Name not added"}${roleBadgeMarkup(person)}</h3>
+              <span>${instagramHandle}</span>
             </div>
             ${
               isMe
@@ -2307,7 +2307,6 @@ async function openProfile(personId) {
             <button type="button" data-open-follow-list="following" data-follow-list-profile="${person.id}">
               <strong>${getFollowingCount(person)}</strong><span>following</span>
             </button>
-            <div><strong>${mutualCount}</strong><span>mutuals</span></div>
           </div>
           <p class="profile-bio">
             <span class="site-role-line">${siteRoleDescription(person)}</span>
@@ -3119,6 +3118,16 @@ document.addEventListener("click", async (event) => {
     saveJoinedGroups();
     renderAuthActions();
     await openInbox(acceptInviteButton.textContent.trim() === "Accept" ? "requests" : "invites");
+    return;
+  }
+
+  const acceptGroupChatButton = event.target.closest("[data-accept-group-chat]");
+  if (acceptGroupChatButton) {
+    if (!requireLogin("Sign in or sign up first to accept group chat requests.")) return;
+    const accepted = await acceptCustomGroupChatRequest(acceptGroupChatButton.dataset.acceptGroupChat);
+    if (accepted) {
+      await openInbox("groups");
+    }
     return;
   }
 

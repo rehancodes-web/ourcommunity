@@ -1359,7 +1359,7 @@ select {
 
 .group-chat-picker label {
   display: grid;
-  grid-template-columns: auto 34px 1fr;
+  grid-template-columns: auto 34px minmax(0, 1fr);
   gap: 8px;
   align-items: center;
   padding: 8px;
@@ -1367,6 +1367,18 @@ select {
   border: 1px solid var(--line);
   border-radius: 8px;
   font-weight: 850;
+}
+
+.group-chat-picker label > span:last-child {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.group-chat-picker small {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 750;
 }
 
 .group-chat-picker input {
@@ -1533,7 +1545,7 @@ select {
 
 .insta-stats {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 8px;
   margin: 14px 0 10px;
   text-align: center;
@@ -1939,8 +1951,8 @@ select {
   }
 
   .insta-stats {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    text-align: left;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    text-align: center;
   }
 
 }
