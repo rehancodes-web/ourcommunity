@@ -1350,6 +1350,34 @@ function setAuthMessage(message = "") {
   authMessage.textContent = message;
 }
 
+function readableAuthError(error, fallback = "Could not complete that request.") {
+  const message = String(error?.message || error || "").trim();
+  const lowerMessage = message.toLowerCase();
+  if (lowerMessage.includes("load failed") || lowerMessage.includes("failed to fetch") || lowerMessage.includes("network")) {
+    return "Could not reach Supabase. Check internet, turn off private/ad blocking for this site, then try again.";
+  }
+  if (lowerMessage.includes("rate limit")) {
+    return "Too many signup emails were requested. Wait a few minutes, then try again.";
+  }
+  if (lowerMessage.includes("already registered") || lowerMessage.includes("already exists")) {
+    return "This email already has an account. Use Sign in instead.";
+  }
+  return message || fallback;
+}
+
+async function runAuthRequest(requestFn) {
+  try {
+    const firstResult = await requestFn();
+    if (!firstResult?.error || !readableAuthError(firstResult.error).startsWith("Could not reach Supabase.")) {
+      return firstResult;
+    }
+    await new Promise((resolve) => window.setTimeout(resolve, 700));
+    return await requestFn();
+  } catch (error) {
+    return { data: null, error };
+  }
+}
+
 function normalizePerson(person, index = 0) {
   const handle = person.instagram || "";
   return {
@@ -3705,9 +3733,9 @@ authForm.addEventListener("click", async (event) => {
     return;
   }
   const redirectTo = window.location.href.split("#")[0];
-  const { error } = await supabaseClient.auth.resetPasswordForEmail(email, { redirectTo });
+  const { error } = await runAuthRequest(() => supabaseClient.auth.resetPasswordForEmail(email, { redirectTo }));
   if (error) {
-    setAuthError(error.message || "Could not send the reset email.");
+    setAuthError(readableAuthError(error, "Could not send the reset email."));
     return;
   }
   setAuthMessage("Password reset email sent. Check your inbox.");
@@ -3724,21 +3752,16 @@ authForm.addEventListener("submit", async (event) => {
       setAuthError("Enter your email and password.");
       return;
     }
-    if (supabaseClient) {
-      const { data, error } = await supabaseClient.auth.signInWithPassword({ email, password });
-      if (error) {
-        setAuthError(error.message || "Email or password is wrong.");
-        return;
-      }
-      currentUser = makeSupabaseProfile(data.user);
-    } else {
-      const account = Object.values(getAccountStore()).find((item) => item.user?.email === email);
-      if (!account || account.password !== password) {
-        setAuthError("Email or password is wrong.");
-        return;
-      }
-      currentUser = account.user;
+    if (!supabaseClient) {
+      setAuthError("Supabase did not load. Refresh the page and try again.");
+      return;
     }
+    const { data, error } = await runAuthRequest(() => supabaseClient.auth.signInWithPassword({ email, password }));
+    if (error) {
+      setAuthError(readableAuthError(error, "Email or password is wrong."));
+      return;
+    }
+    currentUser = makeSupabaseProfile(data.user);
     await loadPublicProfiles();
     mergeSavedProfileIntoCurrentUser();
     await loadFollowGraph();
@@ -3756,35 +3779,16 @@ authForm.addEventListener("submit", async (event) => {
       setAuthError("Use a real email and a password with at least 6 characters.");
       return;
     }
-    if (supabaseClient) {
-      const { data, error } = await supabaseClient.auth.signUp({ email, password });
-      if (error) {
-        setAuthError(error.message || "Could not create your account.");
-        return;
-      }
-      currentUser = makeSupabaseProfile(data.user || { id: `email-${Date.now()}`, email, user_metadata: {} });
-    } else {
-      currentUser = {
-        id: `local-${Date.now()}`,
-        username: "",
-        name: "",
-        age: "",
-        gender: "",
-        email,
-        emailVerified: false,
-        instagram: "",
-        bio: "",
-        placesVisited: 0,
-        preferredVibe: "heritage",
-        randomRequests: "yes",
-        profileVisibility: "everyone",
-        allowDmFrom: "followers",
-        inviteSource: "followers",
-      };
+    if (!supabaseClient) {
+      setAuthError("Supabase did not load. Refresh the page and try again.");
+      return;
     }
-    const accounts = getAccountStore();
-    accounts[email] = { password, user: currentUser };
-    saveAccountStore(accounts);
+    const { data, error } = await runAuthRequest(() => supabaseClient.auth.signUp({ email, password }));
+    if (error) {
+      setAuthError(readableAuthError(error, "Could not create your account."));
+      return;
+    }
+    currentUser = makeSupabaseProfile(data.user || { id: `email-${Date.now()}`, email, user_metadata: {} });
     saveCurrentUser();
     renderAuthActions();
     hideAuth();
