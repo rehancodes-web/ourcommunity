@@ -3527,22 +3527,31 @@ function openSearchedProfileFromButton(button) {
   openProfile(button.dataset.searchProfile);
 }
 
+const activeFollowRequests = new Set();
+
 async function handleFollowButton(followButton) {
   if (!followButton) return;
   if (!requireLogin("Sign in or sign up first to follow people.")) return;
   const personId = followButton.dataset.followPerson;
   if (!personId) return;
+  if (activeFollowRequests.has(personId)) return;
+  activeFollowRequests.add(personId);
   followButton.disabled = true;
-  let shouldFollow = false;
-  if (followedPeople.has(personId)) {
-    followedPeople.delete(personId);
-  } else {
-    followedPeople.add(personId);
-    shouldFollow = true;
+  try {
+    let shouldFollow = false;
+    if (followedPeople.has(personId)) {
+      followedPeople.delete(personId);
+    } else {
+      followedPeople.add(personId);
+      shouldFollow = true;
+    }
+    saveFollowedPeople();
+    await saveFollowToSupabase(personId, shouldFollow);
+    await openProfile(personId);
+  } finally {
+    activeFollowRequests.delete(personId);
+    if (document.body.contains(followButton)) followButton.disabled = false;
   }
-  saveFollowedPeople();
-  await saveFollowToSupabase(personId, shouldFollow);
-  await openProfile(personId);
 }
 
 document.addEventListener("click", async (event) => {
@@ -3593,6 +3602,11 @@ document.addEventListener("click", async (event) => {
 
   const followButton = event.target.closest("[data-follow-person]");
   if (followButton) {
+    if (Date.now() - lastMobileFollowTap < 900 && followButton.dataset.followPerson === lastMobileFollowPersonId) {
+      event.preventDefault();
+      event.stopPropagation();
+      return;
+    }
     await handleFollowButton(followButton);
     return;
   }
@@ -4002,12 +4016,14 @@ searchResults.addEventListener("touchstart", (event) => {
 }, { passive: false });
 
 let lastMobileFollowTap = 0;
+let lastMobileFollowPersonId = "";
 async function handleMobileFollowTap(event) {
   const followButton = event.target.closest("[data-follow-person]");
   if (!followButton) return;
   const now = Date.now();
   if (now - lastMobileFollowTap < 500) return;
   lastMobileFollowTap = now;
+  lastMobileFollowPersonId = followButton.dataset.followPerson || "";
   event.preventDefault();
   event.stopPropagation();
   await handleFollowButton(followButton);
