@@ -218,12 +218,14 @@ body.has-scrolled.is-signed-in .auth-actions {
 
 .profile-chip:hover,
 .settings-icon-button:hover,
-.messenger-button:hover {
+.messenger-button:hover,
+.notification-button:hover {
   border-color: #b9ab96;
   transform: translateY(-1px);
 }
 
-.messenger-button {
+.messenger-button,
+.notification-button {
   position: relative;
   display: grid;
   place-items: center;
@@ -233,6 +235,10 @@ body.has-scrolled.is-signed-in .auth-actions {
   border: 1px solid var(--line);
   border-radius: 8px;
   cursor: pointer;
+}
+
+.notification-button {
+  border-radius: 999px;
 }
 
 .messenger-button span {
@@ -268,7 +274,42 @@ body.has-scrolled.is-signed-in .auth-actions {
   transform: rotate(-22deg);
 }
 
-.messenger-button > strong {
+.notification-button span {
+  position: relative;
+  width: 22px;
+  height: 24px;
+  border: 3px solid var(--ink);
+  border-bottom-width: 4px;
+  border-radius: 12px 12px 8px 8px;
+}
+
+.notification-button span::before {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: -7px;
+  width: 8px;
+  height: 6px;
+  border: 3px solid var(--ink);
+  border-bottom: 0;
+  border-radius: 999px 999px 0 0;
+  transform: translateX(-50%);
+}
+
+.notification-button span::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  bottom: -9px;
+  width: 8px;
+  height: 5px;
+  background: var(--teal);
+  border-radius: 0 0 999px 999px;
+  transform: translateX(-50%);
+}
+
+.messenger-button > strong,
+.notification-button > strong {
   position: absolute;
   top: -7px;
   right: -7px;
@@ -334,6 +375,41 @@ body.has-scrolled.is-signed-in .auth-actions {
   font-size: 20px;
   font-weight: 850;
   line-height: 1;
+}
+
+.settings-icon-button::before {
+  content: none !important;
+}
+
+.settings-glyph,
+.settings-glyph::before,
+.settings-glyph::after {
+  display: block;
+  height: 3px;
+  background: var(--ink);
+  border-radius: 999px;
+}
+
+.settings-glyph {
+  position: relative;
+  width: 22px;
+}
+
+.settings-glyph::before,
+.settings-glyph::after {
+  content: "";
+  position: absolute;
+  width: 16px;
+}
+
+.settings-glyph::before {
+  top: -7px;
+  left: 0;
+}
+
+.settings-glyph::after {
+  right: 0;
+  bottom: -7px;
 }
 
 .auth-button.compact {
@@ -1348,6 +1424,11 @@ select {
   margin-top: 10px;
 }
 
+.notification-list {
+  display: grid;
+  gap: 10px;
+}
+
 .inbox-subsection {
   display: grid;
   gap: 8px;
@@ -1854,17 +1935,21 @@ select {
     order: 1;
   }
 
-  body.is-signed-in .auth-actions .profile-chip {
+  body.is-signed-in .auth-actions .notification-button {
     order: 2;
+  }
+
+  body.is-signed-in .auth-actions .profile-chip {
+    order: 3;
   }
 
   body.is-signed-in .auth-actions [data-open-settings],
   body.is-signed-in .auth-actions .settings-icon-button {
-    order: 3;
+    order: 4;
   }
 
   body.is-signed-in .auth-actions .auth-button.compact {
-    order: 4;
+    order: 5;
   }
 
   body.is-signed-in .auth-actions [data-signout] {
@@ -1877,6 +1962,7 @@ select {
   }
 
   body.is-signed-in .messenger-button,
+  body.is-signed-in .notification-button,
   body.is-signed-in .profile-chip,
   body.is-signed-in .settings-icon-button,
   body.is-signed-in [data-open-settings] {

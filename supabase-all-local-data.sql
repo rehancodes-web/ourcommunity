@@ -2,6 +2,37 @@
 -- It creates tables for the remaining local browser data:
 -- suggested spots, custom groups, group membership, reviews, uploads, messages, follows, and roles.
 
+create table if not exists public.profiles (
+  id uuid primary key references auth.users(id) on delete cascade,
+  username text,
+  name text,
+  age integer,
+  gender text,
+  email text,
+  instagram text,
+  bio text,
+  places_visited integer not null default 0,
+  preferred_vibe text,
+  random_requests text,
+  site_role text not null default 'member',
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+alter table public.profiles add column if not exists username text;
+alter table public.profiles add column if not exists name text;
+alter table public.profiles add column if not exists age integer;
+alter table public.profiles add column if not exists gender text;
+alter table public.profiles add column if not exists email text;
+alter table public.profiles add column if not exists instagram text;
+alter table public.profiles add column if not exists bio text;
+alter table public.profiles add column if not exists places_visited integer not null default 0;
+alter table public.profiles add column if not exists preferred_vibe text;
+alter table public.profiles add column if not exists random_requests text;
+alter table public.profiles add column if not exists site_role text not null default 'member';
+alter table public.profiles add column if not exists created_at timestamptz not null default now();
+alter table public.profiles add column if not exists updated_at timestamptz not null default now();
+
 create table if not exists public.community_spots (
   id text primary key,
   created_by uuid references auth.users(id) on delete set null,
@@ -72,6 +103,13 @@ create table if not exists public.inbox_group_chats (
   check (array_length(member_ids, 1) >= 1 and (array_length(member_ids, 1) + coalesce(array_length(request_ids, 1), 0)) >= 2)
 );
 
+create table if not exists public.notification_reads (
+  user_id uuid not null references auth.users(id) on delete cascade,
+  notification_id text not null,
+  seen_at timestamptz not null default now(),
+  primary key (user_id, notification_id)
+);
+
 alter table public.inbox_group_chats add column if not exists request_ids uuid[] not null default '{}'::uuid[];
 alter table public.inbox_group_chats drop constraint if exists inbox_group_chats_member_ids_check;
 alter table public.inbox_group_chats drop constraint if exists inbox_group_chats_member_request_check;
@@ -88,6 +126,7 @@ create index if not exists messages_recipient_id_idx on public.messages (recipie
 create index if not exists inbox_group_chats_member_ids_idx on public.inbox_group_chats using gin (member_ids);
 create index if not exists inbox_group_chats_request_ids_idx on public.inbox_group_chats using gin (request_ids);
 
+alter table public.profiles enable row level security;
 alter table public.community_spots enable row level security;
 alter table public.meet_groups enable row level security;
 alter table public.group_members enable row level security;
@@ -96,6 +135,14 @@ alter table public.meet_uploads enable row level security;
 alter table public.follows enable row level security;
 alter table public.messages enable row level security;
 alter table public.inbox_group_chats enable row level security;
+alter table public.notification_reads enable row level security;
+
+drop policy if exists "Anyone can read profiles" on public.profiles;
+create policy "Anyone can read profiles" on public.profiles for select using (true);
+drop policy if exists "Users can insert their own profile" on public.profiles;
+create policy "Users can insert their own profile" on public.profiles for insert with check (auth.uid() = id);
+drop policy if exists "Users can update their own profile" on public.profiles;
+create policy "Users can update their own profile" on public.profiles for update using (auth.uid() = id) with check (auth.uid() = id);
 
 drop policy if exists "Anyone can read community spots" on public.community_spots;
 create policy "Anyone can read community spots" on public.community_spots for select using (true);
@@ -166,6 +213,13 @@ create policy "Creators and requested users can update inbox group chats" on pub
   auth.uid() = created_by
   or auth.uid() = any(member_ids)
 );
+
+drop policy if exists "Users can read their own notification reads" on public.notification_reads;
+create policy "Users can read their own notification reads" on public.notification_reads for select using (auth.uid() = user_id);
+drop policy if exists "Users can mark their own notifications read" on public.notification_reads;
+create policy "Users can mark their own notifications read" on public.notification_reads for insert with check (auth.uid() = user_id);
+drop policy if exists "Users can update their own notification reads" on public.notification_reads;
+create policy "Users can update their own notification reads" on public.notification_reads for update using (auth.uid() = user_id) with check (auth.uid() = user_id);
 
 update public.profiles
 set site_role = 'owner'

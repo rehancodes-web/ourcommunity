@@ -633,6 +633,7 @@ const followedPeople = new Set(JSON.parse(localStorage.getItem("put1meetFollowed
 const chatStore = JSON.parse(localStorage.getItem("put1meetChats") || "{}");
 const customGroupChats = JSON.parse(localStorage.getItem("put1meetCustomGroupChats") || "[]");
 const readChatStore = JSON.parse(localStorage.getItem("put1meetReadChats") || "{}");
+const seenNotificationStore = JSON.parse(localStorage.getItem("put1meetSeenNotifications") || "{}");
 const uploadStore = JSON.parse(localStorage.getItem("put1meetUploads") || "{}");
 const reviewStore = JSON.parse(localStorage.getItem("put1meetMeetReviews") || "{}");
 const siteRoleStore = JSON.parse(localStorage.getItem("put1meetSiteRoles") || "{}");
@@ -811,6 +812,7 @@ async function syncSupabaseSession() {
   await loadPublicProfiles();
   mergeSavedProfileIntoCurrentUser();
   await loadFollowGraph();
+  await loadSeenNotificationsFromSupabase();
   await loadMyDmMessagesFromSupabase();
   localStorage.setItem("put1meetUser", JSON.stringify(currentUser));
   localStorage.setItem("put1meetLastUser", JSON.stringify(currentUser));
@@ -1398,10 +1400,15 @@ function renderAuthActions() {
     const profile = getCurrentProfile();
     const displayName = profile.name || profile.username || currentUser.email || "Profile";
     const notificationCount = getMessengerNotificationCount();
+    const generalNotificationCount = getGeneralNotificationCount();
     authActions.innerHTML = `
       <button class="messenger-button" type="button" data-open-inbox aria-label="Open messenger">
         <span></span>
         ${notificationCount ? `<strong>${notificationCount}</strong>` : ""}
+      </button>
+      <button class="notification-button" type="button" data-open-notifications aria-label="Open notifications" title="Notifications">
+        <span></span>
+        ${generalNotificationCount ? `<strong>${generalNotificationCount}</strong>` : ""}
       </button>
       <button class="profile-chip" type="button" data-my-profile aria-label="Open ${displayName} profile" title="${displayName}">
         <span class="avatar">${profileInitials(profile)}</span>
@@ -1411,7 +1418,9 @@ function renderAuthActions() {
           ? ""
           : '<button class="auth-button compact" type="button" data-complete-profile>Complete profile</button>'
       }
-      <button class="settings-icon-button" type="button" data-open-settings aria-label="Open settings" title="Settings">⚙</button>
+      <button class="settings-icon-button" type="button" data-open-settings aria-label="Open settings" title="Settings">
+        <span class="settings-glyph" aria-hidden="true"></span>
+      </button>
       ${welcomeMessage ? `<span class="topbar-message">${welcomeMessage}</span>` : ""}
     `;
     return;
@@ -2265,6 +2274,133 @@ function getMessengerNotificationCount() {
   );
 }
 
+function getSeenNotificationIds() {
+  const userKey = currentUser?.supabaseUserId || currentUser?.email || "guest";
+  return new Set(seenNotificationStore[userKey] || []);
+}
+
+function saveSeenNotificationIds(ids) {
+  const userKey = currentUser?.supabaseUserId || currentUser?.email || "guest";
+  seenNotificationStore[userKey] = [...ids];
+  saveObject("put1meetSeenNotifications", seenNotificationStore);
+}
+
+async function loadSeenNotificationsFromSupabase() {
+  if (!supabaseClient || !currentUser?.supabaseUserId) return;
+  const { data, error } = await supabaseClient
+    .from("notification_reads")
+    .select("notification_id")
+    .eq("user_id", currentUser.supabaseUserId);
+  if (error || !Array.isArray(data)) return;
+  const existing = getSeenNotificationIds();
+  data.forEach((row) => existing.add(row.notification_id));
+  saveSeenNotificationIds(existing);
+}
+
+async function markNotificationsSeenOnSupabase(ids) {
+  if (!supabaseClient || !currentUser?.supabaseUserId || !ids.size) return;
+  const signedIn = await hasSupabaseSession();
+  if (!signedIn) return;
+  await supabaseClient.from("notification_reads").upsert(
+    [...ids].map((notificationId) => ({
+      user_id: currentUser.supabaseUserId,
+      notification_id: notificationId,
+      seen_at: new Date().toISOString(),
+    })),
+  );
+}
+
+function getFollowNotifications() {
+  if (!currentUser?.supabaseUserId) return [];
+  return getFollowersForPerson(getCurrentProfile()).map((person) => ({
+    id: `follow-${getPersonSupabaseId(person) || person.id}`,
+    person,
+    title: `${person.name || person.username || "Someone"} followed you`,
+    detail: person.instagram ? `@${person.instagram.replace(/^@/, "")}` : person.username ? `@${person.username}` : "New follower",
+  }));
+}
+
+function getSystemNotifications() {
+  const notices = [];
+  if (currentUser && !isProfileComplete()) {
+    notices.push({
+      id: "complete-profile",
+      title: "Complete your profile",
+      detail: "Add age, gender, username, and preferences before joining groups.",
+    });
+  }
+  if (currentUser && !currentUser.instagram) {
+    notices.push({
+      id: "add-instagram",
+      title: "Instagram not added",
+      detail: "Add it from Complete profile so people can recognize you.",
+    });
+  }
+  return notices;
+}
+
+function getNotificationItems() {
+  return [...getFollowNotifications(), ...getSystemNotifications()];
+}
+
+function getGeneralNotificationCount() {
+  const seenIds = getSeenNotificationIds();
+  return Math.min(9, getNotificationItems().filter((item) => !seenIds.has(item.id)).length);
+}
+
+async function openNotifications() {
+  if (!currentUser) {
+    openAuth("signin");
+    setAuthError("Sign in or sign up first to see notifications.");
+    return;
+  }
+  await loadPublicProfiles();
+  await loadFollowGraph();
+  const items = getNotificationItems();
+  const seenIds = new Set(items.map((item) => item.id));
+  saveSeenNotificationIds(seenIds);
+  await markNotificationsSeenOnSupabase(seenIds);
+  renderAuthActions();
+  drawerContent.innerHTML = `
+    <div class="profile-panel">
+      <div class="inbox-head">
+        <div>
+          <p class="section-kicker">Notifications</p>
+          <h2>Activity</h2>
+        </div>
+      </div>
+      <div class="notification-list">
+        ${
+          items.length
+            ? items
+                .map((item) =>
+                  item.person
+                    ? `<button class="inbox-item" type="button" data-mutual-profile="${item.person.id}">
+                        <span class="avatar">${profileInitials(item.person)}</span>
+                        <span>
+                          <strong>${item.title}</strong>
+                          <small>${item.detail}</small>
+                        </span>
+                      </button>`
+                    : `<button class="inbox-item" type="button" data-complete-profile>
+                        <span class="avatar">!</span>
+                        <span>
+                          <strong>${item.title}</strong>
+                          <small>${item.detail}</small>
+                        </span>
+                      </button>`,
+                )
+                .join("")
+            : '<p class="muted-small">No notifications yet.</p>'
+        }
+      </div>
+    </div>
+  `;
+  drawerBackdrop.hidden = false;
+  drawer.classList.add("open");
+  drawer.setAttribute("aria-hidden", "false");
+}
+
 function profileShareUrl(person) {
   const baseUrl = window.location.href.split("#")[0];
   return `${baseUrl}#profile=${encodeURIComponent(person.id)}`;
@@ -3014,6 +3150,13 @@ document.addEventListener("click", async (event) => {
   if (inboxButton) {
     if (!requireLogin("Sign in or sign up first to open messenger.")) return;
     await openInbox();
+    return;
+  }
+
+  const notificationsButton = event.target.closest("[data-open-notifications]");
+  if (notificationsButton) {
+    if (!requireLogin("Sign in or sign up first to see notifications.")) return;
+    await openNotifications();
     return;
   }
 
