@@ -2136,6 +2136,9 @@ async function searchSupabaseProfiles(term) {
 function renderProfileSearchResults(matches, term, runId) {
   if (runId !== profileSearchRun || profileSearch.value.trim().toLowerCase() !== term) return;
   const searchShell = profileSearch.closest(".profile-search");
+  if (window.matchMedia("(max-width: 620px)").matches && searchResults.parentElement !== document.body) {
+    document.body.append(searchResults);
+  }
   searchResults.innerHTML = matches.length
     ? matches
         .map(
@@ -3400,12 +3403,17 @@ function closeProfileSearchMode() {
   profileSearch.closest(".profile-search")?.classList.remove("search-open");
   document.body.classList.remove("searching-profiles");
   searchResults.style.removeProperty("--mobile-search-top");
+  if (searchResults.parentElement === document.body) {
+    profileSearch.closest(".profile-search")?.append(searchResults);
+  }
 }
 
 function positionMobileSearchResults() {
   if (!window.matchMedia("(max-width: 620px)").matches || searchResults.hidden) return;
   const inputBox = profileSearch.getBoundingClientRect();
-  searchResults.style.setProperty("--mobile-search-top", `${Math.max(86, Math.round(inputBox.bottom + 6))}px`);
+  const keyboardSafeBottom = Math.max(180, Math.round(window.innerHeight * 0.45));
+  const top = Math.min(Math.max(86, Math.round(inputBox.bottom + 6)), keyboardSafeBottom);
+  searchResults.style.setProperty("--mobile-search-top", `${top}px`);
 }
 
 function openSearchedProfileFromButton(button) {
@@ -3815,10 +3823,18 @@ authBackdrop.addEventListener("click", hideAuth);
 closeChat.addEventListener("click", hideChat);
 chatBackdrop.addEventListener("click", hideChat);
 
-profileSearch.addEventListener("input", () => renderLiveProfileSearch(profileSearch.value));
+function queueProfileSearch() {
+  window.requestAnimationFrame(() => renderLiveProfileSearch(profileSearch.value));
+}
+
+profileSearch.addEventListener("input", queueProfileSearch);
+profileSearch.addEventListener("keyup", queueProfileSearch);
+profileSearch.addEventListener("search", queueProfileSearch);
+profileSearch.addEventListener("change", queueProfileSearch);
+profileSearch.addEventListener("compositionend", queueProfileSearch);
 profileSearch.addEventListener("focus", () => {
   openProfileSearchMode();
-  renderLiveProfileSearch(profileSearch.value);
+  queueProfileSearch();
 });
 profileSearch.addEventListener("click", openProfileSearchMode);
 searchResults.addEventListener("pointerdown", (event) => {
@@ -3842,7 +3858,7 @@ distanceFilter?.addEventListener("change", () => {
 });
 
 document.addEventListener("click", (event) => {
-  if (!event.target.closest(".profile-search")) {
+  if (!event.target.closest(".profile-search") && !event.target.closest("#searchResults")) {
     closeProfileSearchMode();
   }
 });

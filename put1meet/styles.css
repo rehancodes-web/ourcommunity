@@ -2000,13 +2000,17 @@ select {
     -webkit-overflow-scrolling: touch;
   }
 
-  body.searching-profiles .profile-search .search-results {
+  body.searching-profiles .profile-search .search-results,
+  body.searching-profiles > .search-results {
     position: fixed;
     top: var(--mobile-search-top, 112px);
     right: 16px;
     left: 16px;
     z-index: 999;
     width: auto;
+    max-height: min(42vh, 320px);
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
   }
 
   .auth-button:not(.compact) {
