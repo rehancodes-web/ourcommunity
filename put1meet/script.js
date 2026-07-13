@@ -1518,16 +1518,17 @@ function syncAuthModeFields() {
   const isSignin = authMode === "signin";
   const isSignup = authMode === "signup";
   const isProfile = authMode === "profile";
-  ["username", "name", "age", "gender", "instagram", "bio", "placesVisited", "preferredVibe", "randomRequests"].forEach(
+  ["name", "age", "gender", "instagram", "bio", "placesVisited", "preferredVibe", "randomRequests"].forEach(
     (name) => setAuthFieldVisible(name, isProfile),
   );
+  setAuthFieldVisible("username", isSignup || isProfile);
   setAuthFieldVisible("email", isSignin || isSignup);
   setAuthFieldVisible("password", isSignin || isSignup);
   authForm.email.required = isSignin || isSignup;
   authForm.password.required = isSignin || isSignup;
   authForm.password.autocomplete = isSignin ? "current-password" : "new-password";
   authForm.password.placeholder = isSignin ? "Your password" : "Make a password";
-  authForm.username.required = isProfile;
+  authForm.username.required = isSignup || isProfile;
   authForm.name.required = isProfile;
   authForm.age.required = isProfile;
   authForm.gender.required = isProfile;
@@ -4102,6 +4103,12 @@ authForm.addEventListener("submit", async (event) => {
   }
 
   if (authMode === "signup") {
+    const signupUsername = normalizeUsername(formData.get("username"));
+    if (signupUsername.length < 3) {
+      setAuthError("Username needs at least 3 letters or numbers.");
+      authForm.username.focus();
+      return;
+    }
     if (!email || password.length < 6) {
       setAuthError("Use a real email and a password with at least 6 characters.");
       return;
@@ -4110,12 +4117,34 @@ authForm.addEventListener("submit", async (event) => {
       setAuthError("Supabase did not load. Refresh the page and try again.");
       return;
     }
-    const { data, error } = await runAuthRequest(() => supabaseClient.auth.signUp({ email, password }));
+    await loadPublicProfiles();
+    if (usernameIsTaken(signupUsername)) {
+      setAuthError("That username is already used. Try another one.");
+      authForm.username.focus();
+      return;
+    }
+    const { data, error } = await runAuthRequest(() =>
+      supabaseClient.auth.signUp({
+        email,
+        password,
+        options: { data: { username: signupUsername } },
+      }),
+    );
     if (error) {
       setAuthError(readableAuthError(error, "Could not create your account."));
       return;
     }
-    currentUser = makeSupabaseProfile(data.user || { id: `email-${Date.now()}`, email, user_metadata: {} });
+    currentUser = makeSupabaseProfile(
+      data.user || { id: `email-${Date.now()}`, email, user_metadata: { username: signupUsername } },
+      signupUsername,
+    );
+    currentUser.username = signupUsername;
+    await saveProfileToSupabase({
+      ...currentUser,
+      name: currentUser.name || signupUsername,
+      age: currentUser.age || null,
+      gender: currentUser.gender || "",
+    });
     saveCurrentUser();
     renderAuthActions();
     hideAuth();
