@@ -574,6 +574,33 @@ if (Array.isArray(savedSuggestedSpots)) {
   spots.push(...savedSuggestedSpots);
 }
 
+const spotCoordinates = {
+  "bangalore-fort": { lat: 12.9629, lng: 77.5761 },
+  "devanahalli-fort": { lat: 13.2468, lng: 77.7118 },
+  "airport-plane-spotting": { lat: 13.1986, lng: 77.7066 },
+  "avenue-road": { lat: 12.9697, lng: 77.5805 },
+  "bugle-rock": { lat: 12.9439, lng: 77.5686 },
+  gavipuram: { lat: 12.9493, lng: 77.5638 },
+  "nandi-hills": { lat: 13.3702, lng: 77.6835 },
+  "hanumagiri-hills": { lat: 12.9185, lng: 77.553 },
+  "hulimavu-rocks": { lat: 12.8777, lng: 77.6045 },
+  "doresanipalya-forest": { lat: 12.8964, lng: 77.5917 },
+  "avalahalli-forest": { lat: 13.1069, lng: 77.5501 },
+  "vivekananda-gudda": { lat: 12.8162, lng: 77.5088 },
+  "acchala-bettu": { lat: 12.7605, lng: 77.4368 },
+  "turahalli-rocks": { lat: 12.8877, lng: 77.5298 },
+  "turahalli-forest-road": { lat: 12.8858, lng: 77.5317 },
+  "bannerghatta-quarry-edge": { lat: 12.7834, lng: 77.5772 },
+  "broken-bridge-nice-road": { lat: 12.8647, lng: 77.5228 },
+  "kothanur-stalled-builds": { lat: 13.0618, lng: 77.6492 },
+};
+
+spots.forEach((spot) => {
+  if (!spot.coords && spotCoordinates[spot.id]) {
+    spot.coords = spotCoordinates[spot.id];
+  }
+});
+
 const featuredSpotOrder = [
   "vivekananda-gudda",
   "acchala-bettu",
@@ -624,10 +651,16 @@ const emailVerifyBox = document.querySelector("#emailVerifyBox");
 const emailVerifyStatus = document.querySelector("#emailVerifyStatus");
 const profileSearch = document.querySelector("#profileSearch");
 const searchResults = document.querySelector("#searchResults");
+const useLocationButton = document.querySelector("#useLocationButton");
+const distanceFilter = document.querySelector("#distanceFilter");
+const locationStatus = document.querySelector("#locationStatus");
 let authMode = "signup";
 let pendingJoin = null;
 let currentUser = JSON.parse(localStorage.getItem("put1meetUser") || "null");
 let welcomeMessage = "";
+let activeSpotFilter = "all";
+let userLocation = null;
+let distanceLimitKm = "all";
 const joinedGroups = new Set(JSON.parse(localStorage.getItem("put1meetJoinedGroups") || "[]"));
 const followedPeople = new Set(JSON.parse(localStorage.getItem("put1meetFollowedPeople") || "[]"));
 const chatStore = JSON.parse(localStorage.getItem("put1meetChats") || "{}");
@@ -1516,8 +1549,102 @@ function fallbackImageFor(spot) {
   return fallbackImages[tag] || fallbackImages.heritage;
 }
 
-function renderSpots(filter = "all") {
-  const visible = filter === "all" ? spots : spots.filter((spot) => spot.tags.includes(filter));
+function distanceBetweenKm(start, end) {
+  if (!start || !end) return null;
+  const toRad = (value) => (Number(value) * Math.PI) / 180;
+  const earthRadiusKm = 6371;
+  const dLat = toRad(end.lat - start.lat);
+  const dLng = toRad(end.lng - start.lng);
+  const lat1 = toRad(start.lat);
+  const lat2 = toRad(end.lat);
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLng / 2) ** 2;
+  return earthRadiusKm * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+function spotDistanceKm(spot) {
+  return distanceBetweenKm(userLocation, spot.coords);
+}
+
+function formatDistance(spot) {
+  const distance = spotDistanceKm(spot);
+  if (distance == null) return "";
+  return `${distance < 10 ? distance.toFixed(1) : Math.round(distance)} km away`;
+}
+
+function distanceBadgeMarkup(spot) {
+  const label = formatDistance(spot);
+  return label ? `<span class="pill distance-pill">${label}</span>` : "";
+}
+
+function updateLocationControls(message = "") {
+  if (!useLocationButton || !distanceFilter || !locationStatus) return;
+  const hasLocation = Boolean(userLocation);
+  distanceFilter.disabled = !hasLocation;
+  useLocationButton.textContent = hasLocation ? "Update location" : "Use my location";
+  locationStatus.textContent = message || (hasLocation ? "Distance on" : "Location off");
+  locationStatus.classList.toggle("active", hasLocation);
+}
+
+function requestUserLocation() {
+  if (!navigator.geolocation) {
+    updateLocationControls("Location not supported");
+    return;
+  }
+  updateLocationControls("Asking permission...");
+  navigator.geolocation.getCurrentPosition(
+    (position) => {
+      userLocation = {
+        lat: position.coords.latitude,
+        lng: position.coords.longitude,
+      };
+      updateLocationControls("Distance on");
+      renderSpots(activeSpotFilter);
+    },
+    (error) => {
+      const messages = {
+        1: "Permission denied",
+        2: "Location unavailable",
+        3: "Location timed out",
+      };
+      updateLocationControls(messages[error.code] || "Could not get location");
+    },
+    {
+      enableHighAccuracy: true,
+      timeout: 10000,
+      maximumAge: 300000,
+    },
+  );
+}
+
+function getVisibleSpots(filter = activeSpotFilter) {
+  const maxDistance = distanceLimitKm === "all" ? null : Number(distanceLimitKm);
+  return spots
+    .filter((spot) => filter === "all" || spot.tags.includes(filter))
+    .filter((spot) => {
+      if (!userLocation || !maxDistance) return true;
+      const distance = spotDistanceKm(spot);
+      return distance != null && distance <= maxDistance;
+    })
+    .sort((a, b) => {
+      if (!userLocation) return 0;
+      return (spotDistanceKm(a) ?? Number.POSITIVE_INFINITY) - (spotDistanceKm(b) ?? Number.POSITIVE_INFINITY);
+    });
+}
+
+function renderSpots(filter = activeSpotFilter) {
+  activeSpotFilter = filter;
+  const visible = getVisibleSpots(filter);
+  if (!visible.length) {
+    grid.innerHTML = `
+      <div class="empty-spots">
+        <h3>No spots match that distance.</h3>
+        <p>Try a bigger distance range or turn distance filtering off.</p>
+      </div>
+    `;
+    return;
+  }
   grid.innerHTML = visible
     .map(
       (spot) => `
@@ -1527,6 +1654,7 @@ function renderSpots(filter = "all") {
             <div class="meta-row">
               <span class="pill">${spot.area}</span>
               <span class="pill">${spot.mood}</span>
+              ${distanceBadgeMarkup(spot)}
             </div>
             <h3>${spot.name}</h3>
             <p>${spot.blurb}</p>
@@ -3423,7 +3551,8 @@ document.addEventListener("click", async (event) => {
   if (filterButton) {
     document.querySelectorAll(".filter").forEach((button) => button.classList.remove("active"));
     filterButton.classList.add("active");
-    renderSpots(filterButton.dataset.filter);
+    activeSpotFilter = filterButton.dataset.filter;
+    renderSpots(activeSpotFilter);
     return;
   }
 
@@ -3471,6 +3600,11 @@ chatBackdrop.addEventListener("click", hideChat);
 
 profileSearch.addEventListener("input", () => renderProfileSearch(profileSearch.value));
 profileSearch.addEventListener("focus", () => renderProfileSearch(profileSearch.value));
+useLocationButton?.addEventListener("click", requestUserLocation);
+distanceFilter?.addEventListener("change", () => {
+  distanceLimitKm = distanceFilter.value;
+  renderSpots(activeSpotFilter);
+});
 
 document.addEventListener("click", (event) => {
   if (!event.target.closest(".profile-search")) {
@@ -3940,6 +4074,7 @@ async function initializeApp() {
   await migrateLocalDataToSupabase();
   await loadCommunityDataFromSupabase();
   await loadMyDmMessagesFromSupabase();
+  updateLocationControls();
   renderSpots();
   openSharedProfileFromHash();
 }

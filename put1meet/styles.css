@@ -487,6 +487,14 @@ body.has-scrolled.is-signed-in .auth-actions {
   gap: 10px;
 }
 
+.distance-filter {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
 .button,
 .filter,
 .icon-button {
@@ -600,6 +608,53 @@ h2 {
   color: white;
   background: var(--ink);
   border-color: var(--ink);
+}
+
+.distance-filter select {
+  min-height: 40px;
+  padding: 0 12px;
+  background: white;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  color: var(--ink);
+  font-weight: 800;
+}
+
+.distance-filter select:disabled {
+  color: var(--muted);
+  background: #f1eadf;
+}
+
+.location-status {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 850;
+}
+
+.location-status.active {
+  color: var(--teal);
+}
+
+.distance-pill {
+  color: var(--teal);
+}
+
+.empty-spots {
+  grid-column: 1 / -1;
+  padding: 28px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+
+.empty-spots h3,
+.empty-spots p {
+  margin: 0;
+}
+
+.empty-spots p {
+  margin-top: 6px;
+  color: var(--muted);
 }
 
 .spot-grid {
@@ -1860,6 +1915,15 @@ select {
     grid-template-columns: 1fr;
   }
 
+  .controls {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .distance-filter {
+    justify-content: flex-start;
+  }
+
   .hero {
     min-height: 460px;
   }
@@ -1884,6 +1948,16 @@ select {
     flex-direction: column;
     gap: 10px;
     padding: 10px 16px;
+  }
+
+  .distance-filter,
+  .distance-filter select,
+  .distance-filter .mini-button {
+    width: 100%;
+  }
+
+  .location-status {
+    width: 100%;
   }
 
   .nav-shell {

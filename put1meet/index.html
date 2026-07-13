@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>put1meet | Bangalore spots</title>
     <link rel="preconnect" href="https://images.unsplash.com" />
-    <link rel="stylesheet" href="styles.css?v=87" />
+    <link rel="stylesheet" href="styles.css?v=88" />
   </head>
   <body>
     <header class="topbar">
@@ -68,6 +68,18 @@
           <button class="filter" data-filter="hills">Hills</button>
           <button class="filter" data-filter="abandoned">Abandoned</button>
           <button class="filter" data-filter="night">Night vibe</button>
+        </div>
+        <div class="distance-filter" aria-label="Distance filter">
+          <button class="mini-button secondary" type="button" id="useLocationButton">Use my location</button>
+          <select id="distanceFilter" aria-label="Maximum distance from you" disabled>
+            <option value="all">Any distance</option>
+            <option value="5">Within 5 km</option>
+            <option value="10">Within 10 km</option>
+            <option value="20">Within 20 km</option>
+            <option value="40">Within 40 km</option>
+            <option value="80">Within 80 km</option>
+          </select>
+          <span id="locationStatus" class="location-status">Location off</span>
         </div>
       </section>
 
@@ -223,6 +235,6 @@
     </section>
 
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <script src="script.js?v=87"></script>
+    <script src="script.js?v=88"></script>
   </body>
 </html>
