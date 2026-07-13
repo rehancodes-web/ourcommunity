@@ -1033,6 +1033,14 @@ async function saveSuggestedSpotToSupabase(spot) {
   });
 }
 
+async function syncBuiltInSpotsToSupabase() {
+  if (!supabaseClient || !currentUser?.supabaseUserId || !["owner", "admin"].includes(getSiteRole(getCurrentProfile()))) return;
+  const syncKey = `put1meetBuiltInSpotsSynced-${currentUser.supabaseUserId}-v1`;
+  if (localStorage.getItem(syncKey) === "yes") return;
+  await Promise.all(spots.map((spot) => saveSuggestedSpotToSupabase(spot)));
+  localStorage.setItem(syncKey, "yes");
+}
+
 async function loadSuggestedSpotsFromSupabase() {
   if (!supabaseClient) return;
   const { data, error } = await supabaseClient
@@ -1203,6 +1211,7 @@ async function migrateLocalDataToSupabase() {
 }
 
 async function loadCommunityDataFromSupabase() {
+  await syncBuiltInSpotsToSupabase();
   await loadSuggestedSpotsFromSupabase();
   await loadGroupsFromSupabase();
   await loadJoinedGroupsFromSupabase();
@@ -1882,18 +1891,46 @@ function mergeCustomGroupChat(chat) {
 
 async function saveCustomGroupChatToSupabase(chat) {
   if (!supabaseClient || !currentUser?.supabaseUserId || !chat?.id) return false;
-  const { error } = await supabaseClient.from("messages").insert({
+  const { error } = await supabaseClient.from("inbox_group_chats").upsert({
+    id: chat.id,
+    name: chat.name,
+    created_by: chat.createdBy || currentUser.supabaseUserId,
+    member_ids: chat.memberIds || [currentUser.supabaseUserId],
+    data: chat,
+    updated_at: new Date().toISOString(),
+  });
+  if (!error) return true;
+  const { error: fallbackError } = await supabaseClient.from("messages").insert({
     chat_key: `custom-group-${chat.id}`,
     sender_id: currentUser.supabaseUserId,
     recipient_id: null,
     sender_name: currentUser.name || currentUser.username || "Explorer",
     body: `${GROUP_CHAT_META_PREFIX}${JSON.stringify(chat)}`,
   });
-  return !error;
+  return !fallbackError;
 }
 
 async function loadCustomGroupChatsFromSupabase() {
   if (!supabaseClient || !currentUser?.supabaseUserId) return;
+  const { data: tableData, error: tableError } = await supabaseClient
+    .from("inbox_group_chats")
+    .select("id, name, created_by, member_ids, data, created_at, updated_at")
+    .contains("member_ids", [currentUser.supabaseUserId])
+    .order("updated_at", { ascending: false })
+    .limit(200);
+  if (!tableError && Array.isArray(tableData)) {
+    tableData.forEach((row) =>
+      mergeCustomGroupChat({
+        ...(row.data || {}),
+        id: row.id,
+        name: row.name,
+        memberIds: row.member_ids || row.data?.memberIds || [],
+        createdBy: row.created_by || row.data?.createdBy || "",
+        createdAt: row.created_at || row.data?.createdAt || "",
+      }),
+    );
+    return;
+  }
   const { data, error } = await supabaseClient
     .from("messages")
     .select("chat_key, body, created_at")
@@ -2152,7 +2189,11 @@ function profileShareUrl(person) {
   return `${baseUrl}#profile=${encodeURIComponent(person.id)}`;
 }
 
-function openProfile(personId) {
+async function openProfile(personId) {
+  if (currentUser) {
+    await loadPublicProfiles();
+    await loadFollowGraph();
+  }
   const person = findPerson(personId);
   if (!person) return;
   const isMe = person.id === "me";
@@ -3493,8 +3534,15 @@ document.addEventListener("submit", async (event) => {
       createdBy: currentUser.supabaseUserId,
       createdAt: new Date().toISOString(),
     };
+    const savedToSupabase = await saveCustomGroupChatToSupabase(chat);
+    if (!savedToSupabase) {
+      groupChatForm.insertAdjacentHTML(
+        "afterbegin",
+        '<p class="complete-warning">Could not save this group chat to Supabase. Run the inbox group chat SQL once, then try again.</p>',
+      );
+      return;
+    }
     mergeCustomGroupChat(chat);
-    await saveCustomGroupChatToSupabase(chat);
     chatStore[`custom-group-${chat.id}`] = chatStore[`custom-group-${chat.id}`] || [];
     saveObject("put1meetChats", chatStore);
     await openChat(`custom-group-${chat.id}`, {
