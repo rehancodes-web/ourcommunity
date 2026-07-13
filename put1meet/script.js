@@ -6,6 +6,35 @@ const GROUP_CHAT_META_PREFIX = "__PUT1MEET_GROUP_CHAT__";
 
 const spots = [
   {
+    id: "abandoned-house",
+    name: "Abandoned House",
+    area: "Bengaluru shared pin",
+    tags: ["abandoned"],
+    mood: "Overgrown house, old walls, quiet photo spot",
+    image: "assets/abandoned-house.png",
+    imagePosition: "center 48%",
+    mapUrl: "https://maps.app.goo.gl/spjZknmkbEknZKeU9",
+    blurb:
+      "An abandoned-house style spot from a shared Google Maps pin. Treat it as a look-from-public-access location unless access is clearly legal and safe.",
+    groups: [
+      { day: "Saturday", date: "25 Jul", time: "7:00 AM", people: 0 },
+      { day: "Sunday", date: "26 Jul", time: "5:00 PM", people: 0 },
+    ],
+    tips: [
+      "Confirm the exact pin and access rules before going; do not enter private, locked, or unsafe property.",
+      "Go only in daylight with a small group and avoid broken floors, roofs, staircases, or dark interiors.",
+      "Take photos from safe public edges if the structure is fenced, guarded, or marked restricted.",
+    ],
+    reviews: [
+      {
+        user: "Community visitor",
+        rating: "4.0",
+        text: "Strong abandoned-house mood from the outside. Best treated as a careful photo stop, not a trespass plan.",
+        photo: "assets/abandoned-house.png",
+      },
+    ],
+  },
+  {
     id: "bangalore-fort",
     name: "Bangalore Fort Remnants",
     area: "KR Market / Pete",
@@ -602,6 +631,7 @@ spots.forEach((spot) => {
 });
 
 const featuredSpotOrder = [
+  "abandoned-house",
   "vivekananda-gudda",
   "acchala-bettu",
   "broken-bridge-nice-road",
