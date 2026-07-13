@@ -1423,6 +1423,10 @@ function renderAuthActions() {
   `;
 }
 
+function updateScrolledHeader() {
+  document.body.classList.toggle("has-scrolled", window.scrollY > 24);
+}
+
 function showWelcome(message) {
   welcomeMessage = message;
   renderAuthActions();
@@ -3793,5 +3797,7 @@ async function initializeApp() {
 }
 
 window.addEventListener("hashchange", openSharedProfileFromHash);
+window.addEventListener("scroll", updateScrolledHeader, { passive: true });
+updateScrolledHeader();
 initializeApp();
 
