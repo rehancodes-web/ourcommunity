@@ -138,31 +138,6 @@ nav {
   line-height: 1.25;
 }
 
-body.has-scrolled.is-signed-in .topbar {
-  align-items: center;
-  padding-top: 8px;
-  padding-bottom: 8px;
-}
-
-body.has-scrolled.is-signed-in .brand small,
-body.has-scrolled.is-signed-in .brand-credit,
-body.has-scrolled.is-signed-in nav,
-body.has-scrolled.is-signed-in .profile-search,
-body.has-scrolled.is-signed-in .auth-actions .auth-button.compact,
-body.has-scrolled.is-signed-in .topbar-message {
-  display: none;
-}
-
-body.has-scrolled.is-signed-in .nav-shell {
-  flex: 0 0 auto;
-  width: auto;
-  gap: 10px;
-}
-
-body.has-scrolled.is-signed-in .auth-actions {
-  flex-wrap: nowrap;
-}
-
 .profile-search {
   position: relative;
   flex: 0 1 260px;
