@@ -60,6 +60,17 @@ create table if not exists public.messages (
   created_at timestamptz not null default now()
 );
 
+create table if not exists public.inbox_group_chats (
+  id text primary key,
+  name text not null,
+  created_by uuid not null references auth.users(id) on delete cascade,
+  member_ids uuid[] not null,
+  data jsonb not null default '{}'::jsonb,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  check (array_length(member_ids, 1) >= 2)
+);
+
 create index if not exists meet_groups_spot_id_idx on public.meet_groups (spot_id);
 create index if not exists group_members_user_id_idx on public.group_members (user_id);
 create index if not exists meet_reviews_group_id_idx on public.meet_reviews (group_id);
@@ -67,6 +78,7 @@ create index if not exists meet_uploads_group_id_idx on public.meet_uploads (gro
 create index if not exists messages_chat_key_created_at_idx on public.messages (chat_key, created_at);
 create index if not exists messages_sender_id_idx on public.messages (sender_id);
 create index if not exists messages_recipient_id_idx on public.messages (recipient_id);
+create index if not exists inbox_group_chats_member_ids_idx on public.inbox_group_chats using gin (member_ids);
 
 alter table public.community_spots enable row level security;
 alter table public.meet_groups enable row level security;
@@ -75,6 +87,7 @@ alter table public.meet_reviews enable row level security;
 alter table public.meet_uploads enable row level security;
 alter table public.follows enable row level security;
 alter table public.messages enable row level security;
+alter table public.inbox_group_chats enable row level security;
 
 drop policy if exists "Anyone can read community spots" on public.community_spots;
 create policy "Anyone can read community spots" on public.community_spots for select using (true);
@@ -124,6 +137,23 @@ drop policy if exists "Users can send their own messages" on public.messages;
 create policy "Users can send their own messages" on public.messages for insert with check (
   sender_id = auth.uid()
   and length(trim(body)) > 0
+);
+
+drop policy if exists "Members can read inbox group chats" on public.inbox_group_chats;
+create policy "Members can read inbox group chats" on public.inbox_group_chats for select using (
+  auth.uid() = any(member_ids)
+);
+drop policy if exists "Users can create inbox group chats" on public.inbox_group_chats;
+create policy "Users can create inbox group chats" on public.inbox_group_chats for insert with check (
+  auth.uid() = created_by
+  and auth.uid() = any(member_ids)
+);
+drop policy if exists "Creators can update inbox group chats" on public.inbox_group_chats;
+create policy "Creators can update inbox group chats" on public.inbox_group_chats for update using (
+  auth.uid() = created_by
+) with check (
+  auth.uid() = created_by
+  and auth.uid() = any(member_ids)
 );
 
 update public.profiles
