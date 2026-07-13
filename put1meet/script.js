@@ -2032,18 +2032,27 @@ function getFollowingForPerson(person) {
 }
 
 function getMutualProfiles(person) {
-  const allProfiles = getAllProfiles().filter((profile) => profile.id !== "me" && profile.id !== person.id);
-  const mutuals = allProfiles.filter((profile) => profile.relationship === "mutual" || followedPeople.has(profile.id));
-  if (person.id === "me") return mutuals;
-  if (person.relationship === "mutual" || followedPeople.has(person.id)) {
-    return mutuals.slice(0, 4);
-  }
-  return mutuals.slice(0, 2);
+  const currentUserId = currentUser?.supabaseUserId;
+  const personId = getPersonSupabaseId(person);
+  if (!currentUserId || !personId || personId === currentUserId || !followGraphLoaded) return [];
+  const peopleIFollow = new Set(
+    followRows
+      .filter((row) => row.follower_id === currentUserId)
+      .map((row) => row.following_id),
+  );
+  const viewedProfileFollowers = followRows
+    .filter((row) => row.following_id === personId)
+    .map((row) => row.follower_id);
+  return uniqueProfilesById(
+    viewedProfileFollowers
+      .filter((profileId) => profileId !== currentUserId && profileId !== personId && peopleIFollow.has(profileId))
+      .map(findProfileBySupabaseId)
+      .filter(Boolean),
+  );
 }
 
 function getMutualCount(person) {
-  if (person.id === "me") return 0;
-  return getMutualProfiles(person).length + (person.relationship === "follower" ? 1 : 0);
+  return getMutualProfiles(person).length;
 }
 
 function mutualMarkup(person) {
