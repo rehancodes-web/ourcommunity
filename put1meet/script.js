@@ -2431,13 +2431,16 @@ async function openProfile(personId) {
               <h3>${person.name || "Name not added"}${roleBadgeMarkup(person)}</h3>
               <span>${instagramHandle}</span>
             </div>
-            ${
-              isMe
-                ? '<button class="mini-button secondary" data-complete-profile>Edit profile</button>'
-                : `<button class="mini-button ${isFollowing ? "" : "gold"}" data-follow-person="${person.id}">
-                    ${isFollowing ? "Following" : "Follow"}
-                  </button>`
-            }
+            <div class="profile-top-actions">
+              <button class="icon-button share-profile-icon" type="button" data-share-profile="${person.id}" aria-label="Share profile" title="Share profile">
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="M4 12v7a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-7"/>
+                  <path d="M12 16V4"/>
+                  <path d="m7 9 5-5 5 5"/>
+                </svg>
+              </button>
+              ${isMe ? '<button class="mini-button secondary" data-complete-profile>Edit profile</button>' : ""}
+            </div>
           </div>
           <div class="insta-stats" aria-label="Profile stats">
             <div><strong>${person.photos?.length || 0}</strong><span>posts</span></div>
@@ -2457,11 +2460,13 @@ async function openProfile(personId) {
         </div>
       </div>
       <div class="profile-actions">
-        <button class="mini-button secondary" data-share-profile="${person.id}">Share profile</button>
         ${
           isMe
             ? '<button class="mini-button secondary" data-complete-profile>Complete profile</button>'
             : `
+              <button class="mini-button ${isFollowing ? "" : "gold"}" data-follow-person="${person.id}">
+                ${isFollowing ? "Following" : "Follow"}
+              </button>
               <button class="mini-button secondary" data-direct-chat="${person.id}">Message</button>
             `
         }
