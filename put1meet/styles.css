@@ -1983,10 +1983,28 @@ select {
   .profile-search {
     width: 100%;
     flex: 0 0 auto;
+    z-index: 70;
   }
 
   .profile-search input {
     min-height: 38px;
+  }
+
+  .profile-search.search-open,
+  .profile-search:focus-within {
+    overflow: visible;
+    z-index: 90;
+  }
+
+  .profile-search .search-results {
+    position: absolute;
+    top: calc(100% + 6px);
+    right: 0;
+    left: 0;
+    width: 100%;
+    max-height: min(52vh, 360px);
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
   }
 
   .auth-button:not(.compact) {
@@ -2121,6 +2139,16 @@ select {
 
   body.has-scrolled.is-signed-in .profile-search {
     display: block;
+  }
+
+  body.has-scrolled.is-signed-in .profile-search.search-open,
+  body.has-scrolled.is-signed-in .profile-search:focus-within {
+    max-height: 68px;
+    opacity: 1;
+    pointer-events: auto;
+    transform: translateY(0);
+    visibility: visible;
+    overflow: visible;
   }
 
   body.has-scrolled.is-signed-in .brand {

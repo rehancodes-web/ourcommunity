@@ -2003,9 +2003,11 @@ function getAllProfiles() {
 
 function renderProfileSearch(query) {
   const term = query.trim().toLowerCase();
+  const searchShell = profileSearch.closest(".profile-search");
   if (!term) {
     searchResults.hidden = true;
     searchResults.innerHTML = "";
+    searchShell?.classList.remove("search-open");
     return;
   }
   const matches = getAllProfiles()
@@ -2032,6 +2034,7 @@ function renderProfileSearch(query) {
         .join("")
     : '<p>No profiles found.</p>';
   searchResults.hidden = false;
+  searchShell?.classList.add("search-open");
 }
 
 function getJoinedGroupEntries() {
@@ -3229,13 +3232,19 @@ function requireCompleteProfile(message = "Complete your profile before joining 
   return false;
 }
 
+function openSearchedProfileFromButton(button) {
+  if (!button) return;
+  if (!requireLogin("Sign in or sign up first to search and view profiles.")) return;
+  profileSearch.value = "";
+  searchResults.hidden = true;
+  profileSearch.closest(".profile-search")?.classList.remove("search-open");
+  openProfile(button.dataset.searchProfile);
+}
+
 document.addEventListener("click", async (event) => {
   const searchedProfileButton = event.target.closest("[data-search-profile]");
   if (searchedProfileButton) {
-    if (!requireLogin("Sign in or sign up first to search and view profiles.")) return;
-    profileSearch.value = "";
-    searchResults.hidden = true;
-    openProfile(searchedProfileButton.dataset.searchProfile);
+    openSearchedProfileFromButton(searchedProfileButton);
     return;
   }
 
@@ -3626,6 +3635,12 @@ chatBackdrop.addEventListener("click", hideChat);
 
 profileSearch.addEventListener("input", () => renderProfileSearch(profileSearch.value));
 profileSearch.addEventListener("focus", () => renderProfileSearch(profileSearch.value));
+searchResults.addEventListener("pointerdown", (event) => {
+  const searchedProfileButton = event.target.closest("[data-search-profile]");
+  if (!searchedProfileButton) return;
+  event.preventDefault();
+  openSearchedProfileFromButton(searchedProfileButton);
+});
 useLocationButton?.addEventListener("click", requestUserLocation);
 distanceFilter?.addEventListener("change", () => {
   distanceLimitKm = distanceFilter.value;
@@ -3635,6 +3650,7 @@ distanceFilter?.addEventListener("change", () => {
 document.addEventListener("click", (event) => {
   if (!event.target.closest(".profile-search")) {
     searchResults.hidden = true;
+    profileSearch.closest(".profile-search")?.classList.remove("search-open");
   }
 });
 
