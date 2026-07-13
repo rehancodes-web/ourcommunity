@@ -2,6 +2,7 @@ const SUPABASE_URL = "https://vruyrpukjaiapmvgbzgv.supabase.co";
 const SUPABASE_PUBLISHABLE_KEY = "sb_publishable_0p7NHvbRX63BBLMlnL_OOQ_kXR6aDi7";
 const supabaseClient = window.supabase?.createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY) || null;
 const SITE_OWNER_EMAIL = "rehanzn2007@gmail.com";
+const GROUP_CHAT_META_PREFIX = "__PUT1MEET_GROUP_CHAT__";
 
 const spots = [
   {
@@ -291,6 +292,67 @@ const spots = [
     ],
   },
   {
+    id: "doresanipalya-forest",
+    name: "Doresanipalya Forest",
+    area: "JP Nagar / Bannerghatta Road",
+    tags: ["nature"],
+    mood: "City forest, quiet trail, shaded walk",
+    image:
+      "https://imgstaticcontent.lbb.in/lbbnew/wp-content/uploads/sites/2/2018/01/29182354/290118_DoresanipalyaForest_01.jpg?fm=webp&w=1200&h=675&dpr=1",
+    mapUrl: "https://www.google.com/maps/search/?api=1&query=Doresanipalya%20Forest%20Research%20Station%20JP%20Nagar%20Bengaluru",
+    blurb:
+      "A pocket forest and research-station side near JP Nagar/Bannerghatta Road, useful for small daylight nature walks without leaving the city.",
+    groups: [
+      { day: "Saturday", date: "25 Jul", time: "7:00 AM", people: 8 },
+      { day: "Sunday", date: "26 Jul", time: "4:45 PM", people: 5 },
+    ],
+    tips: [
+      "Go in daylight and keep the group quiet because this is a forest/research-area setting.",
+      "Stick to open public paths and do not enter restricted research or fenced sections.",
+      "Carry water and mosquito repellent, and avoid leaving plastic or food waste behind.",
+    ],
+    reviews: [
+      {
+        user: "Community visitor",
+        rating: "4.2",
+        text: "A surprisingly calm green pocket near JP Nagar. Best for a slow morning walk.",
+        photo:
+          "https://imgstaticcontent.lbb.in/lbbnew/wp-content/uploads/sites/2/2018/01/29182354/290118_DoresanipalyaForest_01.jpg?fm=webp&w=900&h=600&dpr=1",
+      },
+    ],
+  },
+  {
+    id: "avalahalli-forest",
+    name: "Avalahalli Forest",
+    area: "Yelahanka / Hesaraghatta side",
+    tags: ["nature", "hills"],
+    mood: "Forest trail, birdwatching, cycling paths",
+    image:
+      "https://nearbangalore.com/wp-content/uploads/2024/11/Avalahalli-Forest.webp",
+    mapUrl: "https://www.google.com/maps/search/?api=1&query=Avalahalli%20Forest%20Yelahanka%20Bengaluru",
+    blurb:
+      "A north-Bengaluru forest trail pick near the Yelahanka/Hesaraghatta side, known for quiet dirt paths, cycling routes, and birdwatching-style morning walks.",
+    groups: [
+      { day: "Saturday", date: "25 Jul", time: "6:30 AM", people: 10 },
+      { day: "Sunday", date: "26 Jul", time: "5:00 PM", people: 7 },
+      { day: "Wednesday", date: "29 Jul", time: "6:15 AM", people: 5 },
+    ],
+    tips: [
+      "Go during permitted daylight hours and stick to open public trails.",
+      "Carry water, mosquito repellent, and shoes with grip; some paths get dusty or muddy.",
+      "Keep noise low for birdwatching and avoid restricted forest or plantation sections.",
+    ],
+    reviews: [
+      {
+        user: "Community visitor",
+        rating: "4.5",
+        text: "Feels like a proper north-side escape. Best early morning when cyclists and birdwatchers are around.",
+        photo:
+          "https://nearbangalore.com/wp-content/uploads/2024/11/Avalahalli-Forest.webp",
+      },
+    ],
+  },
+  {
     id: "vivekananda-gudda",
     name: "Vivekananda Gudda",
     area: "Bengaluru outskirts",
@@ -569,6 +631,8 @@ let welcomeMessage = "";
 const joinedGroups = new Set(JSON.parse(localStorage.getItem("put1meetJoinedGroups") || "[]"));
 const followedPeople = new Set(JSON.parse(localStorage.getItem("put1meetFollowedPeople") || "[]"));
 const chatStore = JSON.parse(localStorage.getItem("put1meetChats") || "{}");
+const customGroupChats = JSON.parse(localStorage.getItem("put1meetCustomGroupChats") || "[]");
+const readChatStore = JSON.parse(localStorage.getItem("put1meetReadChats") || "{}");
 const uploadStore = JSON.parse(localStorage.getItem("put1meetUploads") || "{}");
 const reviewStore = JSON.parse(localStorage.getItem("put1meetMeetReviews") || "{}");
 const siteRoleStore = JSON.parse(localStorage.getItem("put1meetSiteRoles") || "{}");
@@ -877,6 +941,7 @@ function directProfileIdFromChatKey(chatKey) {
 }
 
 function messageRowToLocal(row) {
+  if (String(row.body || "").startsWith(GROUP_CHAT_META_PREFIX)) return null;
   return {
     sender: row.sender_name || "Explorer",
     senderId: row.sender_id || "",
@@ -890,8 +955,10 @@ async function loadChatMessagesFromSupabase(chatKey) {
   const canonicalKey = canonicalChatKey(chatKey);
   if (!supabaseClient || !currentUser?.supabaseUserId) return chatStore[canonicalKey] || chatStore[chatKey] || [];
   const recipientId = chatRecipientId(canonicalKey);
-  const keys = [...new Set([chatKey, canonicalKey, recipientId ? `dm-${recipientId}` : "", `dm-${currentUser.supabaseUserId}`].filter(Boolean))];
-  await loadMyDmMessagesFromSupabase();
+  const keys = canonicalKey.startsWith("dm-")
+    ? [...new Set([chatKey, canonicalKey, recipientId ? `dm-${recipientId}` : "", `dm-${currentUser.supabaseUserId}`].filter(Boolean))]
+    : [canonicalKey];
+  if (canonicalKey.startsWith("dm-")) await loadMyDmMessagesFromSupabase();
   const { data, error } = await supabaseClient
     .from("messages")
     .select("id, chat_key, sender_id, recipient_id, sender_name, body, created_at")
@@ -902,8 +969,10 @@ async function loadChatMessagesFromSupabase(chatKey) {
   const existing = chatStore[canonicalKey] || [];
   chatStore[canonicalKey] = [...existing];
   data.forEach((row) => {
+    if (String(row.body || "").startsWith(GROUP_CHAT_META_PREFIX)) return;
     if (!chatStore[canonicalKey].some((message) => message.createdAt && message.createdAt === row.created_at)) {
-      chatStore[canonicalKey].push(messageRowToLocal(row));
+      const localMessage = messageRowToLocal(row);
+      if (localMessage) chatStore[canonicalKey].push(localMessage);
     }
   });
   chatStore[canonicalKey].sort((a, b) => String(a.createdAt || "").localeCompare(String(b.createdAt || "")));
@@ -927,7 +996,8 @@ async function loadMyDmMessagesFromSupabase() {
     if (!key) return;
     chatStore[key] = chatStore[key] || [];
     if (!chatStore[key].some((message) => message.createdAt && message.createdAt === row.created_at)) {
-      chatStore[key].push(messageRowToLocal(row));
+      const localMessage = messageRowToLocal(row);
+      if (localMessage) chatStore[key].push(localMessage);
     }
   });
   Object.keys(chatStore).forEach((key) => {
@@ -1324,17 +1394,15 @@ function renderAuthActions() {
         <span></span>
         ${notificationCount ? `<strong>${notificationCount}</strong>` : ""}
       </button>
-      <button class="profile-chip" type="button" data-my-profile>
+      <button class="profile-chip" type="button" data-my-profile aria-label="Open ${displayName} profile" title="${displayName}">
         <span class="avatar">${profileInitials(profile)}</span>
-        <span>${displayName}${roleBadgeMarkup(profile)}</span>
       </button>
       ${
         isProfileComplete()
           ? ""
-          : '<button class="auth-button" type="button" data-complete-profile>Complete profile</button>'
+          : '<button class="auth-button compact" type="button" data-complete-profile>Complete profile</button>'
       }
-      <button class="auth-button" type="button" data-open-settings>Settings</button>
-      <button class="auth-button primary-lite" type="button" data-signout>Sign out</button>
+      <button class="settings-icon-button" type="button" data-open-settings aria-label="Open settings" title="Settings">⚙</button>
       ${welcomeMessage ? `<span class="topbar-message">${welcomeMessage}</span>` : ""}
     `;
     return;
@@ -1797,6 +1865,63 @@ function getJoinedGroupEntries() {
     .filter(Boolean);
 }
 
+function saveCustomGroupChats() {
+  saveObject("put1meetCustomGroupChats", customGroupChats);
+}
+
+function mergeCustomGroupChat(chat) {
+  if (!chat?.id) return;
+  const existingIndex = customGroupChats.findIndex((item) => item.id === chat.id);
+  if (existingIndex >= 0) {
+    customGroupChats[existingIndex] = { ...customGroupChats[existingIndex], ...chat };
+  } else {
+    customGroupChats.unshift(chat);
+  }
+  saveCustomGroupChats();
+}
+
+async function saveCustomGroupChatToSupabase(chat) {
+  if (!supabaseClient || !currentUser?.supabaseUserId || !chat?.id) return false;
+  const { error } = await supabaseClient.from("messages").insert({
+    chat_key: `custom-group-${chat.id}`,
+    sender_id: currentUser.supabaseUserId,
+    recipient_id: null,
+    sender_name: currentUser.name || currentUser.username || "Explorer",
+    body: `${GROUP_CHAT_META_PREFIX}${JSON.stringify(chat)}`,
+  });
+  return !error;
+}
+
+async function loadCustomGroupChatsFromSupabase() {
+  if (!supabaseClient || !currentUser?.supabaseUserId) return;
+  const { data, error } = await supabaseClient
+    .from("messages")
+    .select("chat_key, body, created_at")
+    .like("chat_key", "custom-group-%")
+    .like("body", `${GROUP_CHAT_META_PREFIX}%`)
+    .order("created_at", { ascending: false })
+    .limit(300);
+  if (error || !Array.isArray(data)) return;
+  data.forEach((row) => {
+    try {
+      const chat = JSON.parse(String(row.body || "").replace(GROUP_CHAT_META_PREFIX, ""));
+      if (chat.memberIds?.includes(currentUser.supabaseUserId)) mergeCustomGroupChat(chat);
+    } catch {
+      // Ignore broken metadata rows.
+    }
+  });
+}
+
+function getCustomGroupChatEntries() {
+  return customGroupChats
+    .filter((chat) => chat.createdBy === currentUser?.supabaseUserId || chat.memberIds?.includes(currentUser?.supabaseUserId))
+    .map((chat) => ({
+      ...chat,
+      members: (chat.memberIds || []).map(findProfileBySupabaseId).filter(Boolean),
+      messages: chatStore[`custom-group-${chat.id}`] || [],
+    }));
+}
+
 function groupLabel(spot, group) {
   return `${spot.name} - ${group.day}, ${group.date}`;
 }
@@ -1861,6 +1986,49 @@ function getFollowingCount(person) {
   const syncedCount = followRows.filter((row) => row.follower_id === personId).length;
   if (followGraphLoaded) return syncedCount;
   return person.id === "me" ? followedPeople.size : 0;
+}
+
+function getPersonSupabaseId(person) {
+  if (!person) return "";
+  return person.id === "me" ? currentUser?.supabaseUserId || "" : person.id || "";
+}
+
+function findProfileBySupabaseId(profileId) {
+  if (!profileId) return null;
+  if (currentUser?.supabaseUserId === profileId) return getCurrentProfile();
+  return publicProfiles.find((person) => person.id === profileId) || null;
+}
+
+function uniqueProfilesById(profiles) {
+  const seen = new Set();
+  return profiles.filter((profile) => {
+    const profileId = getPersonSupabaseId(profile) || profile.id;
+    if (!profileId || seen.has(profileId)) return false;
+    seen.add(profileId);
+    return true;
+  });
+}
+
+function getFollowersForPerson(person) {
+  const personId = getPersonSupabaseId(person);
+  if (!personId) return [];
+  return uniqueProfilesById(
+    followRows
+      .filter((row) => row.following_id === personId)
+      .map((row) => findProfileBySupabaseId(row.follower_id))
+      .filter(Boolean),
+  );
+}
+
+function getFollowingForPerson(person) {
+  const personId = getPersonSupabaseId(person);
+  if (!personId) return [];
+  return uniqueProfilesById(
+    followRows
+      .filter((row) => row.follower_id === personId)
+      .map((row) => findProfileBySupabaseId(row.following_id))
+      .filter(Boolean),
+  );
 }
 
 function getMutualProfiles(person) {
@@ -1940,10 +2108,33 @@ function getRequestEntries() {
     .slice(0, 3);
 }
 
+function lastMessageTime(messages = []) {
+  const lastMessage = messages.at(-1);
+  return lastMessage?.createdAt || "";
+}
+
+function isUnreadDmEntry(entry) {
+  const lastTime = lastMessageTime(entry.messages);
+  if (!lastTime) return false;
+  const lastMessage = entry.messages.at(-1);
+  if (lastMessage?.senderId === currentUser?.supabaseUserId || lastMessage?.sender === currentUser?.name) return false;
+  return readChatStore[entry.key] !== lastTime;
+}
+
+function markChatRead(chatKey, messages = []) {
+  if (!chatKey?.startsWith("dm-")) return;
+  const lastTime = lastMessageTime(messages);
+  if (!lastTime) return;
+  readChatStore[chatKey] = lastTime;
+  saveObject("put1meetReadChats", readChatStore);
+}
+
 function getMessengerNotificationCount() {
   return Math.min(
     9,
-    getTrustedDmEntries().length + getInviteEntries().length + getRequestEntries().length + getRequestDmEntries().length,
+    [...getTrustedDmEntries(), ...getRequestDmEntries()].filter(isUnreadDmEntry).length +
+      getInviteEntries().length +
+      getRequestEntries().length,
   );
 }
 
@@ -1983,8 +2174,12 @@ function openProfile(personId) {
           </div>
           <div class="insta-stats" aria-label="Profile stats">
             <div><strong>${person.photos?.length || 0}</strong><span>posts</span></div>
-            <div><strong>${getFollowerCount(person)}</strong><span>followers</span></div>
-            <div><strong>${getFollowingCount(person)}</strong><span>following</span></div>
+            <button type="button" data-open-follow-list="followers" data-follow-list-profile="${person.id}">
+              <strong>${getFollowerCount(person)}</strong><span>followers</span>
+            </button>
+            <button type="button" data-open-follow-list="following" data-follow-list-profile="${person.id}">
+              <strong>${getFollowingCount(person)}</strong><span>following</span>
+            </button>
             <div><strong>${mutualCount}</strong><span>mutuals</span></div>
           </div>
           <p class="profile-bio">
@@ -2143,7 +2338,10 @@ function openSettings() {
           <p class="role-current">${roleBadgeMarkup(getCurrentProfile()) || '<span class="role-badge member">member</span>'} ${siteRoleDescription(getCurrentProfile())}</p>
           ${canManageSiteRoles() ? siteRoleManagerMarkup() : '<p class="muted-small">Only the website owner can change admin and moderator roles.</p>'}
         </section>
-        <button class="mini-button secondary" type="submit">Save settings</button>
+        <div class="settings-footer">
+          <button class="mini-button secondary" type="submit">Save settings</button>
+          <button class="mini-button danger" type="button" data-signout>Sign out</button>
+        </div>
       </form>
     </div>
   `;
@@ -2178,6 +2376,44 @@ function openMutuals(personId) {
                 )
                 .join("")
             : '<p class="muted-small">No mutual profiles yet.</p>'
+        }
+      </div>
+    </div>
+  `;
+  chatBackdrop.hidden = false;
+  chatModal.classList.add("open");
+  chatModal.setAttribute("aria-hidden", "false");
+}
+
+function followListProfileMarkup(profile) {
+  const isMe = getPersonSupabaseId(profile) === currentUser?.supabaseUserId || profile.id === "me";
+  const isFollowing = followedPeople.has(getPersonSupabaseId(profile) || profile.id);
+  return `
+    <button class="inbox-item" type="button" data-mutual-profile="${profile.id}">
+      <span class="avatar">${profileInitials(profile)}</span>
+      <span>
+        <strong>${profile.username ? `@${profile.username.replace(/^@/, "")}` : profile.name}${roleBadgeMarkup(profile)}</strong>
+        <em>${profile.name || "Name not added"}</em>
+        <small>${isMe ? "You" : isFollowing ? "Following" : profile.instagram || "No Instagram"}</small>
+      </span>
+    </button>
+  `;
+}
+
+function openFollowList(personId, type = "followers") {
+  const person = findPerson(personId);
+  if (!person) return;
+  const profiles = type === "following" ? getFollowingForPerson(person) : getFollowersForPerson(person);
+  const title = type === "following" ? "Following" : "Followers";
+  chatContent.innerHTML = `
+    <div class="chat-panel">
+      <p class="section-kicker">${title}</p>
+      <h2>${person.username ? `@${person.username.replace(/^@/, "")}` : person.name}</h2>
+      <div class="mutual-list">
+        ${
+          profiles.length
+            ? profiles.map(followListProfileMarkup).join("")
+            : `<p class="muted-small">No ${type} yet.</p>`
         }
       </div>
     </div>
@@ -2222,6 +2458,7 @@ async function openChat(key, meta) {
   cleanDirectMessageSeed(canonicalKey, meta);
   seedMessages(canonicalKey, meta);
   const messages = await loadChatMessagesFromSupabase(canonicalKey);
+  markChatRead(canonicalKey, messages);
   const directProfileId = directProfileIdFromChatKey(canonicalKey);
   chatContent.innerHTML = `
     <div class="chat-panel">
@@ -2259,6 +2496,7 @@ async function openChat(key, meta) {
   chatBackdrop.hidden = false;
   chatModal.classList.add("open");
   chatModal.setAttribute("aria-hidden", "false");
+  renderAuthActions();
 }
 
 async function openInbox(mode = "messages") {
@@ -2269,13 +2507,16 @@ async function openInbox(mode = "messages") {
   await loadPublicProfiles();
   await loadFollowGraph();
   await loadMyDmMessagesFromSupabase();
+  await loadCustomGroupChatsFromSupabase();
   const dms = getTrustedDmEntries();
   const groups = getJoinedGroupEntries();
+  const customGroups = getCustomGroupChatEntries();
   const invites = getInviteEntries();
   const requests = getRequestEntries();
   const requestDms = getRequestDmEntries();
   const isRequests = mode === "requests";
   const isInvites = mode === "invites";
+  const isGroups = mode === "groups";
   chatContent.innerHTML = `
     <div class="chat-panel">
       <div class="inbox-head">
@@ -2290,6 +2531,7 @@ async function openInbox(mode = "messages") {
       <div class="inbox-tabs" role="group" aria-label="Messenger sections">
         <button class="${mode === "messages" ? "active" : ""}" data-inbox-tab="messages">People who texted you</button>
         <button class="${isInvites ? "active" : ""}" data-inbox-tab="invites">Meet invites</button>
+        <button class="${isGroups ? "active" : ""}" data-inbox-tab="groups">Group chats</button>
       </div>
       ${
         mode === "messages"
@@ -2340,8 +2582,56 @@ async function openInbox(mode = "messages") {
                 .join("")
             : '<p class="muted-small">No invites from people you follow yet.</p>'
         }
+      </section>
+      `
+          : ""
+      }
+      ${
+        isGroups
+          ? `
+      <section class="inbox-section active">
         <div class="inbox-subsection">
-          <h4>Groups you are in</h4>
+          <div class="subsection-head">
+            <h4>Group chats</h4>
+            <button class="mini-button secondary" type="button" data-toggle-group-chat-form>Make group chat</button>
+          </div>
+          <form class="group-chat-form" data-group-chat-form hidden>
+            <input name="groupName" placeholder="Group chat name" required>
+            <div class="group-chat-picker">
+              ${publicProfiles
+                .filter((person) => person.id !== currentUser.supabaseUserId)
+                .slice(0, 12)
+                .map(
+                  (person) => `
+                    <label>
+                      <input type="checkbox" name="memberIds" value="${person.id}">
+                      <span class="avatar">${profileInitials(person)}</span>
+                      <strong>${person.username ? `@${person.username.replace(/^@/, "")}` : person.name}</strong>
+                    </label>
+                  `,
+                )
+                .join("")}
+            </div>
+            <button class="mini-button secondary" type="submit">Create group chat</button>
+          </form>
+          ${
+            customGroups.length
+              ? customGroups
+                  .map(
+                    (chat) => `
+                      <button class="inbox-item" data-custom-group-chat="${chat.id}">
+                        <span class="avatar">GC</span>
+                        <span>
+                          <strong>${chat.name}</strong>
+                          <small>${chat.members.map((person) => person.name).slice(0, 3).join(", ") || "New group chat"}</small>
+                        </span>
+                      </button>
+                    `,
+                  )
+                  .join("")
+              : ""
+          }
+          <h4>Meet groups you are in</h4>
           ${
             groups.length
               ? groups
@@ -2520,6 +2810,15 @@ document.addEventListener("click", async (event) => {
     return;
   }
 
+  const followListButton = event.target.closest("[data-open-follow-list]");
+  if (followListButton) {
+    if (!requireLogin("Sign in or sign up first to see followers.")) return;
+    await loadPublicProfiles();
+    await loadFollowGraph();
+    openFollowList(followListButton.dataset.followListProfile, followListButton.dataset.openFollowList);
+    return;
+  }
+
   const followButton = event.target.closest("[data-follow-person]");
   if (followButton) {
     if (!requireLogin("Sign in or sign up first to follow people.")) return;
@@ -2626,6 +2925,27 @@ document.addEventListener("click", async (event) => {
       openChat(`group-${match.group.id}`, {
         kind: "Group chat",
         title: `${match.spot.name} - ${match.group.day}, ${match.group.date}`,
+      });
+    }
+    return;
+  }
+
+  const toggleGroupChatFormButton = event.target.closest("[data-toggle-group-chat-form]");
+  if (toggleGroupChatFormButton) {
+    if (!requireLogin("Sign in or sign up first to make group chats.")) return;
+    const form = chatContent.querySelector("[data-group-chat-form]");
+    if (form) form.hidden = !form.hidden;
+    return;
+  }
+
+  const customGroupChatButton = event.target.closest("[data-custom-group-chat]");
+  if (customGroupChatButton) {
+    if (!requireLogin("Sign in or sign up first to open group chats.")) return;
+    const chat = customGroupChats.find((item) => item.id === customGroupChatButton.dataset.customGroupChat);
+    if (chat) {
+      openChat(`custom-group-${chat.id}`, {
+        kind: "Group chat",
+        title: chat.name,
       });
     }
     return;
@@ -3138,6 +3458,40 @@ document.addEventListener("submit", async (event) => {
       "afterbegin",
       '<p class="complete-warning">Settings saved.</p>',
     );
+    return;
+  }
+
+  const groupChatForm = event.target.closest("[data-group-chat-form]");
+  if (groupChatForm) {
+    event.preventDefault();
+    if (!requireLogin("Sign in or sign up first to make group chats.")) return;
+    const formData = new FormData(groupChatForm);
+    const selectedIds = formData.getAll("memberIds").filter(isSupabaseId);
+    const memberIds = [...new Set([currentUser.supabaseUserId, ...selectedIds])];
+    const groupName = String(formData.get("groupName") || "").trim();
+    groupChatForm.querySelector(".complete-warning")?.remove();
+    if (!groupName || memberIds.length < 2) {
+      groupChatForm.insertAdjacentHTML(
+        "afterbegin",
+        '<p class="complete-warning">Add a group name and choose at least one person.</p>',
+      );
+      return;
+    }
+    const chat = {
+      id: `gc-${Date.now()}`,
+      name: groupName,
+      memberIds,
+      createdBy: currentUser.supabaseUserId,
+      createdAt: new Date().toISOString(),
+    };
+    mergeCustomGroupChat(chat);
+    await saveCustomGroupChatToSupabase(chat);
+    chatStore[`custom-group-${chat.id}`] = chatStore[`custom-group-${chat.id}`] || [];
+    saveObject("put1meetChats", chatStore);
+    await openChat(`custom-group-${chat.id}`, {
+      kind: "Group chat",
+      title: chat.name,
+    });
     return;
   }
 
