@@ -1,0 +1,9 @@
+{
+  "redirects": [
+    {
+      "source": "/",
+      "destination": "/put1meet/",
+      "permanent": false
+    }
+  ]
+}
