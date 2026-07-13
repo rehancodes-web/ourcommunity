@@ -709,6 +709,7 @@ let activeAction = null;
 let activeChatKey = null;
 let activeChatMeta = null;
 let groupSafetyNotice = "";
+let profileSearchRun = 0;
 const chatBackdrop = document.querySelector("#chatBackdrop");
 const chatModal = document.querySelector("#chatModal");
 const closeChat = document.querySelector("#closeChat");
@@ -2072,6 +2073,84 @@ function renderProfileSearch(query) {
   searchShell?.classList.add("search-open");
   document.body.classList.add("searching-profiles");
   positionMobileSearchResults();
+}
+
+function mergeSearchProfiles(localMatches, remoteMatches = []) {
+  const profiles = new Map();
+  [...localMatches, ...remoteMatches].forEach((person) => {
+    if (!person?.id) return;
+    const key = person.id === currentUser?.supabaseUserId ? "me" : person.id;
+    profiles.set(key, person.id === currentUser?.supabaseUserId ? getCurrentProfile() : person);
+  });
+  return [...profiles.values()].slice(0, 8);
+}
+
+async function searchSupabaseProfiles(term) {
+  if (!supabaseClient || term.length < 2) return [];
+  const safeTerm = term.replace(/[%,]/g, " ").trim();
+  if (!safeTerm) return [];
+  const pattern = `%${safeTerm}%`;
+  const { data, error } = await supabaseClient
+    .from("profiles")
+    .select("id, username, name, age, gender, email, instagram, bio, places_visited, preferred_vibe, random_requests, site_role")
+    .or(`username.ilike.${pattern},name.ilike.${pattern},instagram.ilike.${pattern}`)
+    .limit(8);
+  if (error || !Array.isArray(data)) return [];
+  const people = data.map(profileRowToPerson);
+  people.forEach((person) => {
+    if (!publicProfiles.some((existing) => existing.id === person.id)) publicProfiles.push(person);
+  });
+  return people;
+}
+
+function renderProfileSearchResults(matches, term, runId) {
+  if (runId !== profileSearchRun || profileSearch.value.trim().toLowerCase() !== term) return;
+  const searchShell = profileSearch.closest(".profile-search");
+  searchResults.innerHTML = matches.length
+    ? matches
+        .map(
+          (person) => `
+            <button type="button" data-search-profile="${person.id}">
+              <span class="avatar">${profileInitials(person)}</span>
+              <span>
+                <strong>${person.name}${roleBadgeMarkup(person)}</strong>
+                <small>${person.instagram || "No Instagram"} · ${getRelationshipLabel(person)}</small>
+              </span>
+            </button>
+          `,
+        )
+        .join("")
+    : '<p>No profiles found.</p>';
+  searchResults.hidden = false;
+  searchShell?.classList.add("search-open");
+  document.body.classList.add("searching-profiles");
+  positionMobileSearchResults();
+}
+
+async function renderLiveProfileSearch(query) {
+  const term = query.trim().toLowerCase();
+  const runId = ++profileSearchRun;
+  const searchShell = profileSearch.closest(".profile-search");
+  if (!term) {
+    searchResults.hidden = true;
+    searchResults.innerHTML = "";
+    if (document.activeElement !== profileSearch) {
+      searchShell?.classList.remove("search-open");
+      document.body.classList.remove("searching-profiles");
+    }
+    return;
+  }
+  const localMatches = getAllProfiles()
+    .filter((person) =>
+      [person.name, person.username, person.instagram, person.bio, person.relationship]
+        .filter(Boolean)
+        .some((value) => String(value).toLowerCase().includes(term)),
+    )
+    .slice(0, 8);
+
+  renderProfileSearchResults(localMatches, term, runId);
+  const remoteMatches = await searchSupabaseProfiles(term);
+  renderProfileSearchResults(mergeSearchProfiles(localMatches, remoteMatches), term, runId);
 }
 
 function getJoinedGroupEntries() {
@@ -3706,10 +3785,10 @@ authBackdrop.addEventListener("click", hideAuth);
 closeChat.addEventListener("click", hideChat);
 chatBackdrop.addEventListener("click", hideChat);
 
-profileSearch.addEventListener("input", () => renderProfileSearch(profileSearch.value));
+profileSearch.addEventListener("input", () => renderLiveProfileSearch(profileSearch.value));
 profileSearch.addEventListener("focus", () => {
   openProfileSearchMode();
-  renderProfileSearch(profileSearch.value);
+  renderLiveProfileSearch(profileSearch.value);
 });
 profileSearch.addEventListener("click", openProfileSearchMode);
 searchResults.addEventListener("pointerdown", (event) => {
