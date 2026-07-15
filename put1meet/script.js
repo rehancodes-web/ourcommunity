@@ -807,6 +807,33 @@ function slugify(value) {
     .replace(/^-+|-+$/g, "");
 }
 
+function todayDateInputValue() {
+  const today = new Date();
+  const year = today.getFullYear();
+  const month = String(today.getMonth() + 1).padStart(2, "0");
+  const day = String(today.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function formatDateInputValue(value) {
+  if (!value || !value.includes("-")) return value || "";
+  const [year, month, day] = value.split("-").map(Number);
+  if (!year || !month || !day) return value;
+  return new Date(year, month - 1, day).toLocaleDateString("en-IN", {
+    day: "numeric",
+    month: "short",
+  });
+}
+
+function formatTimeInputValue(value) {
+  if (!value || !value.includes(":")) return value || "";
+  const [hours, minutes] = value.split(":").map(Number);
+  if (Number.isNaN(hours) || Number.isNaN(minutes)) return value;
+  const suffix = hours >= 12 ? "PM" : "AM";
+  const displayHours = hours % 12 || 12;
+  return `${displayHours}:${String(minutes).padStart(2, "0")} ${suffix}`;
+}
+
 function readPhotoFile(file) {
   if (!file) return Promise.resolve("");
   return new Promise((resolve, reject) => {
@@ -1888,6 +1915,7 @@ function groupMarkup(spot) {
   const defaultMinAge = currentUser?.defaultMinAge || 14;
   const defaultMaxAge = currentUser?.defaultMaxAge || 80;
   const defaultGender = currentUser?.defaultGroupGender || "any";
+  const today = todayDateInputValue();
   return `
     <section class="drawer-section">
       <div class="group-section-head">
@@ -1900,9 +1928,18 @@ function groupMarkup(spot) {
         travel, and personal safety.
       </p>
       <form class="create-group-form" data-create-group-form="${spot.id}" hidden>
-        <input name="day" placeholder="Day" aria-label="Group day" required>
-        <input name="date" placeholder="Date" aria-label="Group date" required>
-        <input name="time" placeholder="Time" aria-label="Group time" required>
+        <select name="day" aria-label="Group day" required>
+          <option value="">Select day</option>
+          <option value="Monday">Monday</option>
+          <option value="Tuesday">Tuesday</option>
+          <option value="Wednesday">Wednesday</option>
+          <option value="Thursday">Thursday</option>
+          <option value="Friday">Friday</option>
+          <option value="Saturday">Saturday</option>
+          <option value="Sunday">Sunday</option>
+        </select>
+        <input name="date" type="date" min="${today}" aria-label="Group date" required>
+        <input name="time" type="time" aria-label="Group time" required>
         <input name="minAge" inputmode="numeric" min="14" max="80" placeholder="Min age" value="${defaultMinAge}" aria-label="Minimum age">
         <input name="maxAge" inputmode="numeric" min="14" max="80" placeholder="Max age" value="${defaultMaxAge}" aria-label="Maximum age">
         <select name="gender" aria-label="Allowed gender">
@@ -2097,9 +2134,7 @@ function hasAcceptedSafetyDisclaimer() {
 }
 
 function confirmSafetyDisclaimer() {
-  if (hasAcceptedSafetyDisclaimer()) return true;
   const accepted = window.confirm(SAFETY_DISCLAIMER_TEXT);
-  if (accepted) localStorage.setItem(SAFETY_ACK_KEY, "yes");
   return accepted;
 }
 
@@ -4512,10 +4547,11 @@ document.addEventListener("submit", async (event) => {
       openDrawer(spot.id, "groups");
       return;
     }
+    if (!confirmSafetyDisclaimer()) return;
     const newGroup = {
       day: formData.get("day").trim(),
-      date: formData.get("date").trim(),
-      time: formData.get("time").trim(),
+      date: formatDateInputValue(formData.get("date").trim()),
+      time: formatTimeInputValue(formData.get("time").trim()),
       people: 1,
       id: `${spot.id}-custom-${Date.now()}`,
       spotId: spot.id,
