@@ -1240,6 +1240,17 @@ select {
   line-height: 1.35;
 }
 
+.safety-disclaimer {
+  margin: 10px 0 12px;
+  padding: 10px 12px;
+  color: var(--muted);
+  background: #fffaf0;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  font-size: 13px;
+  line-height: 1.45;
+}
+
 .join {
   min-height: 38px;
   padding: 0 12px;

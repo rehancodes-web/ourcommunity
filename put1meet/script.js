@@ -743,6 +743,9 @@ let activeChatKey = null;
 let activeChatMeta = null;
 let groupSafetyNotice = "";
 let profileSearchRun = 0;
+const SAFETY_ACK_KEY = "put1meetSafetyAcknowledged";
+const SAFETY_DISCLAIMER_TEXT =
+  "Safety agreement: put1meet helps people discover and coordinate public meetups, but every visit is your own responsibility. Check local rules, permissions, weather, transport, and personal safety before going. Do not enter restricted, private, locked, or unsafe places. By joining, you understand that put1meet and its creator are not responsible for injuries, losses, disputes, fines, or anything else that may happen during or after a meet.";
 const chatBackdrop = document.querySelector("#chatBackdrop");
 const chatModal = document.querySelector("#chatModal");
 const closeChat = document.querySelector("#closeChat");
@@ -1859,6 +1862,10 @@ function groupMarkup(spot) {
         <button class="mini-button secondary" data-toggle-create-group="${spot.id}">Make new group</button>
       </div>
       ${groupSafetyNotice ? `<p class="safety-warning">${groupSafetyNotice}</p>` : ""}
+      <p class="safety-disclaimer">
+        Safety note: join only public, legal, and safe meets. You are responsible for your own decisions, permissions,
+        travel, and personal safety.
+      </p>
       <form class="create-group-form" data-create-group-form="${spot.id}" hidden>
         <input name="day" placeholder="Day" aria-label="Group day" required>
         <input name="date" placeholder="Date" aria-label="Group date" required>
@@ -2045,6 +2052,17 @@ function setGroupSafetyNotice(message) {
   window.setTimeout(() => {
     if (groupSafetyNotice === message) groupSafetyNotice = "";
   }, 5000);
+}
+
+function hasAcceptedSafetyDisclaimer() {
+  return localStorage.getItem(SAFETY_ACK_KEY) === "yes";
+}
+
+function confirmSafetyDisclaimer() {
+  if (hasAcceptedSafetyDisclaimer()) return true;
+  const accepted = window.confirm(SAFETY_DISCLAIMER_TEXT);
+  if (accepted) localStorage.setItem(SAFETY_ACK_KEY, "yes");
+  return accepted;
 }
 
 function attendeeMarkup(attendees) {
@@ -3994,6 +4012,7 @@ document.addEventListener("click", async (event) => {
       joinedGroups.delete(groupId);
       await saveGroupMembershipToSupabase(groupId, false);
     } else {
+      if (!confirmSafetyDisclaimer()) return;
       const match = findGroup(groupId);
       if (match && !canCurrentUserJoinGroup(match.group)) {
         setGroupSafetyNotice("Because your age is under 18, this meet needs at least one 18+ person before you can join.");
@@ -4260,11 +4279,11 @@ authForm.addEventListener("submit", async (event) => {
 
   if (pendingJoin) {
     const match = findGroup(pendingJoin.groupId);
-    if (match && canCurrentUserJoinGroup(match.group)) {
+    if (match && canCurrentUserJoinGroup(match.group) && confirmSafetyDisclaimer()) {
       joinedGroups.add(pendingJoin.groupId);
       saveJoinedGroups();
       await saveGroupMembershipToSupabase(pendingJoin.groupId, true);
-    } else {
+    } else if (match && !canCurrentUserJoinGroup(match.group)) {
       setGroupSafetyNotice("Because your age is under 18, this meet needs at least one 18+ person before you can join.");
     }
     openDrawer(pendingJoin.spotId, "groups");
