@@ -656,6 +656,7 @@ sortFeaturedSpotsFirst();
 
 const publicProfiles = [];
 const followRows = [];
+const groupMemberRows = [];
 let followGraphLoaded = false;
 
 function hydrateSpotGroups(spot, spotIndex) {
@@ -1311,6 +1312,36 @@ async function loadJoinedGroupsFromSupabase() {
   saveJoinedGroups();
 }
 
+async function loadGroupMembersFromSupabase() {
+  if (!supabaseClient) return;
+  const { data, error } = await supabaseClient
+    .from("group_members")
+    .select("group_id, user_id")
+    .limit(5000);
+  if (error || !Array.isArray(data)) {
+    if (error) console.warn("Could not load group members", error);
+    return;
+  }
+
+  groupMemberRows.splice(0, groupMemberRows.length, ...data.filter((row) => row.group_id && row.user_id));
+
+  const knownProfileIds = new Set(publicProfiles.map((person) => person.id));
+  if (currentUser?.supabaseUserId) knownProfileIds.add(currentUser.supabaseUserId);
+  const missingProfileIds = [...new Set(groupMemberRows.map((row) => row.user_id))]
+    .filter((id) => id && !knownProfileIds.has(id));
+  if (!missingProfileIds.length) return;
+
+  const profileResult = await supabaseClient
+    .from("profiles")
+    .select("id, username, name, age, gender, email, instagram, bio, places_visited, preferred_vibe, random_requests, site_role")
+    .in("id", missingProfileIds)
+    .limit(500);
+  if (profileResult.error || !Array.isArray(profileResult.data)) return;
+  profileResult.data.map(profileRowToPerson).forEach((person) => {
+    if (!publicProfiles.some((existing) => existing.id === person.id)) publicProfiles.push(person);
+  });
+}
+
 async function saveReviewToSupabase(groupId, review) {
   if (!supabaseClient || !currentUser?.supabaseUserId || !groupId || !review) return;
   await supabaseClient.from("meet_reviews").insert({
@@ -1428,6 +1459,7 @@ async function loadCommunityDataFromSupabase() {
   await loadSuggestedSpotsFromSupabase();
   await loadGroupsFromSupabase();
   await loadJoinedGroupsFromSupabase();
+  await loadGroupMembersFromSupabase();
   await loadReviewsFromSupabase();
   await loadUploadsFromSupabase();
 }
@@ -1992,11 +2024,35 @@ function groupMarkup(spot) {
 
 function getGroupAttendees(group, joined = joinedGroups.has(group.id)) {
   const people = (group.attendees || []).map((person, index) => normalizePerson(person, index));
+  const addPerson = (person) => {
+    if (!person) return;
+    const normalized = normalizePerson(person, people.length);
+    const normalizedId = normalized.id === "me" ? currentUser?.supabaseUserId : normalized.id;
+    const alreadyListed = people.some((existing) => {
+      const existingId = existing.id === "me" ? currentUser?.supabaseUserId : existing.id;
+      return (
+        existingId === normalizedId ||
+        (existing.email && normalized.email && existing.email === normalized.email) ||
+        (existing.username && normalized.username && existing.username === normalized.username)
+      );
+    });
+    if (!alreadyListed) people.push(normalized);
+  };
+
+  groupMemberRows
+    .filter((row) => row.group_id === group.id)
+    .forEach((row) => {
+      const memberProfile =
+        row.user_id === currentUser?.supabaseUserId
+          ? getCurrentProfile()
+          : publicProfiles.find((person) => person.id === row.user_id) ||
+            normalizePerson({ id: row.user_id, name: "Explorer", age: 18, gender: "Prefer not to say" });
+      addPerson(memberProfile);
+    });
+
   if (joined && currentUser) {
     const currentProfile = getCurrentProfile();
-    const currentId = currentProfile.id === "me" ? currentUser.supabaseUserId : currentProfile.id;
-    const alreadyListed = people.some((person) => person.id === currentId || person.id === "me" || person.email === currentProfile.email);
-    return alreadyListed ? people : [...people, currentProfile];
+    addPerson(currentProfile);
   }
   return people;
 }
@@ -4095,6 +4151,7 @@ document.addEventListener("click", async (event) => {
       joinedGroups.add(groupId);
       await saveGroupMembershipToSupabase(groupId, true);
     }
+    await loadGroupMembersFromSupabase();
     saveJoinedGroups();
     openDrawer(spotId, "groups");
   }
@@ -4571,6 +4628,7 @@ document.addEventListener("submit", async (event) => {
     if (!savedMembership) {
       setGroupSafetyNotice("The group was made, but joining it did not save. Sign in again and tap Join.");
     }
+    await loadGroupMembersFromSupabase();
     openDrawer(spot.id, "groups");
     return;
   }
