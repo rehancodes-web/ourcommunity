@@ -1382,6 +1382,19 @@ async function migrateLocalDataToSupabase() {
   }
 }
 
+async function syncLocalCustomGroupsToSupabase() {
+  if (!supabaseClient || !currentUser?.supabaseUserId || !(await hasSupabaseSession())) return;
+  const customGroups = spots.flatMap((spot) =>
+    (spot.groups || [])
+      .filter((group) => group.id?.includes("-custom-"))
+      .map((group) => ({ spot, group: { ...group, spotId: group.spotId || spot.id } })),
+  );
+  for (const { spot, group } of customGroups) {
+    const savedGroup = await saveGroupToSupabase(spot.id, group);
+    if (savedGroup && joinedGroups.has(group.id)) await saveGroupMembershipToSupabase(group.id, true);
+  }
+}
+
 async function loadCommunityDataFromSupabase() {
   await purgeTestSpotsFromSupabase();
   await syncBuiltInSpotsToSupabase();
@@ -4596,6 +4609,7 @@ async function initializeApp() {
   await loadFollowGraph();
   await syncSupabaseSession();
   await migrateLocalDataToSupabase();
+  await syncLocalCustomGroupsToSupabase();
   await loadCommunityDataFromSupabase();
   await loadMyDmMessagesFromSupabase();
   updateLocationControls();
