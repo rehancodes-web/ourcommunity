@@ -1209,14 +1209,19 @@ async function loadSuggestedSpotsFromSupabase() {
 }
 
 async function saveGroupToSupabase(spotId, group) {
-  if (!supabaseClient || !currentUser?.supabaseUserId || !spotId || !group?.id) return;
-  await supabaseClient.from("meet_groups").upsert({
+  if (!supabaseClient || !currentUser?.supabaseUserId || !spotId || !group?.id) return false;
+  const { error } = await supabaseClient.from("meet_groups").upsert({
     id: group.id,
     spot_id: spotId,
     created_by: currentUser.supabaseUserId,
     data: group,
     updated_at: new Date().toISOString(),
   });
+  if (error) {
+    console.warn("Could not save meet group", error);
+    return false;
+  }
+  return true;
 }
 
 async function loadGroupsFromSupabase() {
@@ -1226,30 +1231,45 @@ async function loadGroupsFromSupabase() {
     .select("id, spot_id, data")
     .order("created_at", { ascending: true })
     .limit(500);
-  if (error || !Array.isArray(data)) return;
+  if (error || !Array.isArray(data)) {
+    if (error) console.warn("Could not load meet groups", error);
+    return;
+  }
   data.forEach((row) => {
-    const spot = spots.find((item) => item.id === row.spot_id);
-    if (!spot || !row.data?.id || spot.groups.some((group) => group.id === row.data.id)) return;
-    spot.groups.push(row.data);
+    const group = row.data || {};
+    const spotId = row.spot_id || group.spotId;
+    const spot = spots.find((item) => item.id === spotId);
+    const groupId = group.id || row.id;
+    if (!spot || !groupId || spot.groups.some((item) => item.id === groupId)) return;
+    spot.groups.push({ ...group, id: groupId });
   });
 }
 
 async function saveGroupMembershipToSupabase(groupId, shouldJoin) {
-  if (!supabaseClient || !currentUser?.supabaseUserId || !groupId) return;
+  if (!supabaseClient || !currentUser?.supabaseUserId || !groupId) return false;
   const signedIn = await hasSupabaseSession();
-  if (!signedIn) return;
+  if (!signedIn) return false;
   if (shouldJoin) {
-    await supabaseClient.from("group_members").upsert({
+    const { error } = await supabaseClient.from("group_members").upsert({
       group_id: groupId,
       user_id: currentUser.supabaseUserId,
     });
+    if (error) {
+      console.warn("Could not save group membership", error);
+      return false;
+    }
   } else {
-    await supabaseClient
+    const { error } = await supabaseClient
       .from("group_members")
       .delete()
       .eq("group_id", groupId)
       .eq("user_id", currentUser.supabaseUserId);
+    if (error) {
+      console.warn("Could not remove group membership", error);
+      return false;
+    }
   }
+  return true;
 }
 
 async function loadJoinedGroupsFromSupabase() {
@@ -1921,8 +1941,13 @@ function groupMarkup(spot) {
 }
 
 function getGroupAttendees(group, joined = joinedGroups.has(group.id)) {
-  const people = group.attendees.map((person, index) => normalizePerson(person, index));
-  if (joined && currentUser) return [...people, getCurrentProfile()];
+  const people = (group.attendees || []).map((person, index) => normalizePerson(person, index));
+  if (joined && currentUser) {
+    const currentProfile = getCurrentProfile();
+    const currentId = currentProfile.id === "me" ? currentUser.supabaseUserId : currentProfile.id;
+    const alreadyListed = people.some((person) => person.id === currentId || person.id === "me" || person.email === currentProfile.email);
+    return alreadyListed ? people : [...people, currentProfile];
+  }
   return people;
 }
 
@@ -4480,14 +4505,23 @@ document.addEventListener("submit", async (event) => {
       time: formData.get("time").trim(),
       people: 1,
       id: `${spot.id}-custom-${Date.now()}`,
+      spotId: spot.id,
       criteria: { minAge, maxAge, gender },
-      attendees: [],
+      attendees: [getCurrentProfile()],
     };
+    const savedGroup = await saveGroupToSupabase(spot.id, newGroup);
+    if (!savedGroup) {
+      setGroupSafetyNotice("Could not save this group for everyone yet. Run the meet groups SQL in Supabase, then try again.");
+      openDrawer(spot.id, "groups");
+      return;
+    }
     spot.groups.unshift(newGroup);
     joinedGroups.add(newGroup.id);
     saveJoinedGroups();
-    await saveGroupToSupabase(spot.id, newGroup);
-    await saveGroupMembershipToSupabase(newGroup.id, true);
+    const savedMembership = await saveGroupMembershipToSupabase(newGroup.id, true);
+    if (!savedMembership) {
+      setGroupSafetyNotice("The group was made, but joining it did not save. Sign in again and tap Join.");
+    }
     openDrawer(spot.id, "groups");
     return;
   }
