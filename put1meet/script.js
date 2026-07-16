@@ -835,6 +835,17 @@ function formatTimeInputValue(value) {
   return `${displayHours}:${String(minutes).padStart(2, "0")} ${suffix}`;
 }
 
+function getSpotIdFromGroupId(groupId = "") {
+  const customIndex = groupId.indexOf("-custom-");
+  if (customIndex <= 0) return "";
+  const possibleSpotId = groupId.slice(0, customIndex);
+  return spots.some((spot) => spot.id === possibleSpotId) ? possibleSpotId : "";
+}
+
+function getCanonicalGroupSpotId(group = {}, fallbackSpotId = "") {
+  return getSpotIdFromGroupId(group.id || "") || group.spotId || fallbackSpotId || "";
+}
+
 function readPhotoFile(file) {
   if (!file) return Promise.resolve("");
   return new Promise((resolve, reject) => {
@@ -1238,11 +1249,14 @@ async function loadSuggestedSpotsFromSupabase() {
 
 async function saveGroupToSupabase(spotId, group) {
   if (!supabaseClient || !currentUser?.supabaseUserId || !spotId || !group?.id) return false;
+  const canonicalSpotId = getCanonicalGroupSpotId(group, spotId);
+  if (!canonicalSpotId || canonicalSpotId !== spotId) return false;
+  const groupData = { ...group, spotId: canonicalSpotId };
   const { error } = await supabaseClient.from("meet_groups").upsert({
     id: group.id,
-    spot_id: spotId,
+    spot_id: canonicalSpotId,
     created_by: currentUser.supabaseUserId,
-    data: group,
+    data: groupData,
     updated_at: new Date().toISOString(),
   });
   if (error) {
@@ -1265,11 +1279,21 @@ async function loadGroupsFromSupabase() {
   }
   data.forEach((row) => {
     const group = row.data || {};
-    const spotId = row.spot_id || group.spotId;
-    const spot = spots.find((item) => item.id === spotId);
     const groupId = group.id || row.id;
+    const spotId = getCanonicalGroupSpotId({ ...group, id: groupId }, row.spot_id);
+    const spot = spots.find((item) => item.id === spotId);
     if (!spot || !groupId || spot.groups.some((item) => item.id === groupId)) return;
-    spot.groups.push({ ...group, id: groupId });
+    const normalizedGroup = { ...group, id: groupId, spotId };
+    spot.groups.push(normalizedGroup);
+    if (row.spot_id !== spotId || group.spotId !== spotId) {
+      supabaseClient
+        .from("meet_groups")
+        .update({ spot_id: spotId, data: normalizedGroup, updated_at: new Date().toISOString() })
+        .eq("id", groupId)
+        .then(({ error: updateError }) => {
+          if (updateError) console.warn("Could not correct meet group spot", updateError);
+        });
+    }
   });
 }
 
@@ -1445,7 +1469,8 @@ async function syncLocalCustomGroupsToSupabase() {
   const customGroups = spots.flatMap((spot) =>
     (spot.groups || [])
       .filter((group) => group.id?.includes("-custom-"))
-      .map((group) => ({ spot, group: { ...group, spotId: group.spotId || spot.id } })),
+      .map((group) => ({ spot, group: { ...group, spotId: getCanonicalGroupSpotId(group, spot.id) } }))
+      .filter(({ spot, group }) => group.spotId === spot.id),
   );
   for (const { spot, group } of customGroups) {
     const savedGroup = await saveGroupToSupabase(spot.id, group);
